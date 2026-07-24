@@ -1,0 +1,161 @@
+use rmcp::model::Tool;
+use serde_json::json;
+
+use crate::tool_helpers::*;
+
+/// Write-modify tools: set_text, set_fills, set_strokes, move_nodes, resize_nodes,
+/// rename_node, clone_node, set_opacity, set_corner_radius, set_auto_layout,
+/// delete_nodes, set_visible, lock_nodes, unlock_nodes, rotate_nodes, reorder_nodes,
+/// set_blend_mode, set_constraints, reparent_nodes, batch_rename_nodes, find_replace_text (21 tools)
+pub fn write_modify_tools() -> Vec<Tool> {
+    vec![
+        tool("set_text", "Update the text content of an existing TEXT node.",
+            schema_mixed(&[
+                ("nodeId", s("TEXT node ID in colon format e.g. '4029:12345'"), true),
+                ("text", s("New text content"), true),
+            ])),
+
+        tool("set_fills", "Set the fill color on a single node (takes one nodeId, not an array). Use mode='append' to stack a new fill on top of existing fills instead of replacing them.",
+            schema_mixed(&[
+                ("nodeId", s("Node ID in colon format e.g. '4029:12345'"), true),
+                ("color", s("Fill color as hex: #RRGGBB e.g. #FF5733 or #RRGGBBAA e.g. #FF573380 for 50% alpha"), true),
+                ("opacity", n("Fill opacity 0–1 (default 1). Combines multiplicatively with any alpha in the color hex."), false),
+                ("mode", s("'replace' (default) overwrites all existing fills; 'append' stacks this fill on top of existing ones"), false),
+            ])),
+
+        tool("set_strokes", "Set the stroke color and weight on a single node (takes one nodeId, not an array). Use mode='append' to stack a new stroke on top of existing strokes instead of replacing them.",
+            schema_mixed(&[
+                ("nodeId", s("Node ID in colon format e.g. '4029:12345'"), true),
+                ("color", s("Stroke color as hex e.g. #000000"), true),
+                ("strokeWeight", n("Stroke weight in pixels (default 1)"), false),
+                ("mode", s("'replace' (default) overwrites all strokes; 'append' stacks on top of existing strokes"), false),
+            ])),
+
+        tool("move_nodes", "Move one or more nodes to an absolute canvas position. The same x/y is applied to every node independently (not a relative offset from current position).",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("x", n("Target X position"), false),
+                ("y", n("Target Y position"), false),
+            ])),
+
+        tool("resize_nodes", "Resize one or more nodes. The same width/height is applied to every node in the list independently. Provide width, height, or both.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("width", n("New width in pixels"), false),
+                ("height", n("New height in pixels"), false),
+            ])),
+
+        tool("rename_node", "Rename a single node by ID. Returns the updated node with its new name. Use batch_rename_nodes to rename multiple nodes at once or to apply find/replace patterns across many nodes.",
+            schema_mixed(&[
+                ("nodeId", s("Node ID in colon format e.g. '4029:12345'"), true),
+                ("name", s("New name for the node. Figma supports slash-separated path notation e.g. 'Icons/Arrow/Left' to organise nodes in component panels."), true),
+            ])),
+
+        tool("clone_node", "Clone an existing node, optionally repositioning it or placing it in a new parent.",
+            schema_mixed(&[
+                ("nodeId", s("Source node ID in colon format e.g. '4029:12345'"), true),
+                ("x", n("X position of the clone"), false),
+                ("y", n("Y position of the clone"), false),
+                ("parentId", s("Parent node ID for the clone. Defaults to same parent as source."), false),
+            ])),
+
+        tool("set_opacity", "Set the opacity of one or more nodes (0 = fully transparent, 1 = fully opaque).",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("opacity", n("Opacity value between 0 and 1"), true),
+            ])),
+
+        tool("set_corner_radius", "Set corner radius on one or more nodes. Provide a uniform cornerRadius or individual per-corner values.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("cornerRadius", n("Uniform corner radius applied to all corners"), false),
+                ("topLeftRadius", n("Top-left corner radius"), false),
+                ("topRightRadius", n("Top-right corner radius"), false),
+                ("bottomLeftRadius", n("Bottom-left corner radius"), false),
+                ("bottomRightRadius", n("Bottom-right corner radius"), false),
+            ])),
+
+        tool("set_auto_layout", "Set or update auto-layout (flex) properties on an existing frame.",
+            schema_mixed(&[
+                ("nodeId", s("Frame node ID in colon format e.g. '4029:12345'"), true),
+                ("layoutMode", s("Auto-layout direction: HORIZONTAL, VERTICAL, or NONE"), false),
+                ("paddingTop", n("Top padding"), false),
+                ("paddingRight", n("Right padding"), false),
+                ("paddingBottom", n("Bottom padding"), false),
+                ("paddingLeft", n("Left padding"), false),
+                ("itemSpacing", n("Gap between children"), false),
+                ("primaryAxisAlignItems", s("Main-axis alignment: MIN, CENTER, MAX, or SPACE_BETWEEN"), false),
+                ("counterAxisAlignItems", s("Cross-axis alignment: MIN, CENTER, MAX, or BASELINE"), false),
+                ("primaryAxisSizingMode", s("Main-axis sizing: FIXED or AUTO (hug)"), false),
+                ("counterAxisSizingMode", s("Cross-axis sizing: FIXED or AUTO (hug)"), false),
+                ("layoutWrap", s("Wrap behaviour: NO_WRAP or WRAP"), false),
+                ("counterAxisSpacing", n("Gap between wrapped rows/columns (only when layoutWrap is WRAP)"), false),
+            ])),
+
+        tool("delete_nodes", "Delete one or more nodes. This cannot be undone via MCP — use with care.",
+            schema_mixed(&[("nodeIds", arr_s("Node IDs to delete in colon format e.g. ['4029:12345']"), true)])),
+
+        tool("set_visible", "Show or hide one or more nodes by setting their visibility.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("visible", b("true to show the node, false to hide it"), true),
+            ])),
+
+        tool("lock_nodes", "Lock one or more nodes to prevent accidental edits in Figma.",
+            schema_mixed(&[("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true)])),
+
+        tool("unlock_nodes", "Unlock one or more nodes, allowing them to be edited again.",
+            schema_mixed(&[("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true)])),
+
+        tool("rotate_nodes", "Rotate one or more nodes to an absolute angle in degrees.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("rotation", n("Rotation angle in degrees (positive = counter-clockwise in Figma)"), true),
+            ])),
+
+        tool("reorder_nodes", "Change the z-order (layer stack position) of one or more nodes.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("order", s("Order operation: bringToFront, sendToBack, bringForward, or sendBackward"), true),
+            ])),
+
+        tool("set_blend_mode", "Set the blend mode of one or more nodes (e.g. MULTIPLY, SCREEN, OVERLAY).",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("blendMode", s("Blend mode: NORMAL, MULTIPLY, SCREEN, OVERLAY, DARKEN, LIGHTEN, COLOR_DODGE, COLOR_BURN, HARD_LIGHT, SOFT_LIGHT, DIFFERENCE, EXCLUSION, HUE, SATURATION, COLOR, LUMINOSITY, PASS_THROUGH"), true),
+            ])),
+
+        tool("set_constraints", "Set layout constraints (pinning behaviour) on one or more nodes relative to their parent.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345'"), true),
+                ("horizontal", s("Horizontal constraint: MIN (left), MAX (right), CENTER, STRETCH, or SCALE"), false),
+                ("vertical", s("Vertical constraint: MIN (top), MAX (bottom), CENTER, STRETCH, or SCALE"), false),
+            ])),
+
+        tool("reparent_nodes", "Move one or more nodes to a different parent frame, group, or section.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs to move in colon format e.g. ['4029:12345']"), true),
+                ("parentId", s("Target parent node ID in colon format e.g. '4029:99'"), true),
+            ])),
+
+        tool("batch_rename_nodes", "Rename multiple nodes using find/replace, regex substitution, or prefix/suffix addition.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("find", s("String (or regex pattern when useRegex=true) to search for in the node name"), false),
+                ("replace", s("Replacement string. Required when find is provided."), false),
+                ("useRegex", b("Treat find as a regular expression (default false)"), false),
+                ("regexFlags", s("Regex flags e.g. 'gi' (default 'g'). Only used when useRegex=true."), false),
+                ("prefix", s("String to prepend to the node name"), false),
+                ("suffix", s("String to append to the node name"), false),
+            ])),
+
+        tool("find_replace_text", "Find and replace text content across all TEXT nodes in a subtree. Searches the entire current page if no nodeId is given.",
+            schema_mixed(&[
+                ("find", s("Text string (or regex pattern when useRegex=true) to search for"), true),
+                ("replace", s("Replacement string (use empty string to delete matches)"), true),
+                ("nodeId", s("Root node ID to scope the search. Defaults to the entire current page."), false),
+                ("useRegex", b("Treat find as a regular expression (default false)"), false),
+                ("regexFlags", s("Regex flags e.g. 'gi' (default 'g'). Only used when useRegex=true."), false),
+            ])),
+    ]
+}

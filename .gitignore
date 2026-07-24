@@ -1,0 +1,30 @@
+# Rust
+/target/
+
+# Build outputs
+/bin/
+/dist/
+/release/
+/output/
+/example/
+
+# Plugin
+plugin/node_modules/
+plugin/dist/
+
+# npm prebuilt binaries (populated by CI release pipeline)
+npm/bin/darwin-*/
+npm/bin/linux-*/
+npm/bin/windows-*/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI agent
+.codely-cli/

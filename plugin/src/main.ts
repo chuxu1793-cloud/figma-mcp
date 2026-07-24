@@ -30,7 +30,7 @@ const handleRequest = async (request: any) => {
   }
 };
 
-figma.showUI(__html__, { width: 320, height: 230 });
+figma.showUI(__html__, { width: 300, height: 140 });
 sendStatus();
 
 figma.on("selectionchange", () => {

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tokio::sync::RwLock;
 use tracing::info;
 
@@ -94,12 +92,24 @@ impl Node {
             }
         }
 
+        // Create leader outside the lock — port binding may fail
         let mut leader = Leader::new(&self.ip, self.port, &self.version);
         leader.start()?;
 
+        // Atomically update both leader and role
         let mut leader_guard = self.leader.write().await;
+        let mut role_guard = self.role.write().await;
+
+        let old_leader = leader_guard.take();
         *leader_guard = Some(leader);
-        *self.role.write().await = Role::Leader;
+        *role_guard = Role::Leader;
+
+        drop(leader_guard);
+        drop(role_guard);
+
+    if let Some(mut old) = old_leader {
+            old.stop().await;
+        }
         info!("became LEADER");
         Ok(())
     }
@@ -114,19 +124,33 @@ impl Node {
         }
 
         let mut leader_guard = self.leader.write().await;
-        if let Some(mut leader) = leader_guard.take() {
-            leader.stop().await;
+        let mut role_guard = self.role.write().await;
+
+        let old_leader = leader_guard.take();
+        *role_guard = Role::Follower;
+
+        drop(leader_guard);
+        drop(role_guard);
+
+        if let Some(mut old) = old_leader {
+            old.stop().await;
         }
-        *self.role.write().await = Role::Follower;
         info!("became FOLLOWER");
     }
 
     /// Shut down the node regardless of role.
     pub async fn stop(&self) {
         let mut leader_guard = self.leader.write().await;
-        if let Some(mut leader) = leader_guard.take() {
-            leader.stop().await;
+        let mut role_guard = self.role.write().await;
+
+        let old_leader = leader_guard.take();
+        *role_guard = Role::Unknown;
+
+        drop(leader_guard);
+        drop(role_guard);
+
+        if let Some(mut old) = old_leader {
+            old.stop().await;
         }
-        *self.role.write().await = Role::Unknown;
     }
 }

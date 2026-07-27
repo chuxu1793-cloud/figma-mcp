@@ -204,6 +204,10 @@ export const handleReadStyleRequest = async (request: any) => {
               const b = Math.round(c.b * 255);
               cssValue = c.a < 1 ? `rgba(${r}, ${g}, ${b}, ${c.a.toFixed(2)})` : `rgb(${r}, ${g}, ${b})`;
             } else if (variable.resolvedType === "FLOAT" || variable.resolvedType === "STRING" || variable.resolvedType === "BOOLEAN") {
+              if (val && typeof val === "object" && "type" in val && (val as any).type === "VARIABLE_ALIAS") {
+                // Skip alias variables — they can't be resolved to a CSS value without following the reference
+                continue;
+              }
               cssValue = String(val);
             }
             if (cssValue !== null) lines.push(`  ${cssName}: ${cssValue};`);

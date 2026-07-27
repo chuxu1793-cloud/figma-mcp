@@ -64,7 +64,10 @@ async fn main() {
     // Signal handling
     let node_clone = node.clone();
     tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.unwrap();
+        if tokio::signal::ctrl_c().await.is_err() {
+            // No terminal available — wait indefinitely so the task doesn't exit
+            std::future::pending::<()>().await;
+        }
         info!("Shutting down...");
         election.stop();
         node_clone.stop().await;

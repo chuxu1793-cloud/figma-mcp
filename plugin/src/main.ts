@@ -47,7 +47,10 @@ figma.ui.onmessage = async (message) => {
     return;
   }
   if (message.type === "get_ws_config") {
-    const config = await figma.clientStorage.getAsync("ws_config");
+    let config: any = null;
+    try {
+      config = await figma.clientStorage.getAsync("ws_config");
+    } catch {}
     figma.ui.postMessage({
       type: "ws_config",
       host: config?.host ?? "127.0.0.1",
@@ -56,10 +59,12 @@ figma.ui.onmessage = async (message) => {
     return;
   }
   if (message.type === "save_ws_config") {
-    await figma.clientStorage.setAsync("ws_config", {
-      host: message.host,
-      port: message.port,
-    });
+    try {
+      await figma.clientStorage.setAsync("ws_config", {
+        host: message.host,
+        port: message.port,
+      });
+    } catch {}
     return;
   }
   if (message.type === "server-request") {

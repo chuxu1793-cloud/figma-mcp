@@ -62,7 +62,13 @@ impl Leader {
         let port = self.port;
 
         let handle = tokio::spawn(async move {
-            let listener = tokio::net::TcpListener::from_std(listener).unwrap();
+            let listener = match tokio::net::TcpListener::from_std(listener) {
+                Ok(l) => l,
+                Err(e) => {
+                    error!("failed to convert TcpListener: {}", e);
+                    return;
+                }
+            };
             info!("listening on {}:{}", ip, port);
 
             axum::serve(listener, app)

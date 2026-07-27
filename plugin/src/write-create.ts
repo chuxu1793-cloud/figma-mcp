@@ -1,6 +1,8 @@
 import { getBounds } from "./serializers";
 import { makeSolidPaint, getParentNode, base64ToBytes, applyAutoLayout } from "./write-helpers";
 
+const isMixed = (v: unknown): v is symbol => typeof v === "symbol";
+
 export const handleWriteCreateRequest = async (request: any) => {
   switch (request.type) {
     case "create_frame": {
@@ -119,8 +121,8 @@ export const handleWriteCreateRequest = async (request: any) => {
       component.resize(node.width, node.height);
       component.x = node.x;
       component.y = node.y;
-      component.fills = node.fills as Paint[];
-      component.strokes = node.strokes as Paint[];
+      component.fills = isMixed(node.fills) ? [] : node.fills as Paint[];
+      component.strokes = isMixed(node.strokes) ? [] : node.strokes as Paint[];
       if (node.cornerRadius != null && node.cornerRadius !== figma.mixed) {
         component.cornerRadius = node.cornerRadius as number;
       }

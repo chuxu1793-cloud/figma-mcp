@@ -8,7 +8,12 @@ const parseVariableValue = (type: string, value: any): VariableValue => {
     }
     return value as RGBA;
   }
-  if (type === "FLOAT") return typeof value === "number" ? value : parseFloat(String(value));
+  if (type === "FLOAT") {
+    if (typeof value === "number") return value;
+    const n = parseFloat(String(value));
+    if (isNaN(n)) throw new Error(`Invalid FLOAT value: ${value}`);
+    return n;
+  }
   if (type === "BOOLEAN") return value === true || value === "true";
   return String(value); // STRING
 };

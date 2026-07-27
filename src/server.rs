@@ -6,9 +6,8 @@ use rmcp::model::{
     ServerCapabilities, ServerInfo, Tool,
 };
 use rmcp::service::RequestContext;
-use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
+use rmcp::{ErrorData as McpError, RoleServer, ServerHandler};
 use serde_json::Value;
-use tracing::info;
 
 use base64::Engine;
 
@@ -439,7 +438,7 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
         }
 
         // create_frame, create_rectangle, create_ellipse, create_text
-        // set_auto_layout — pass all arguments as params
+        // — pass all arguments as params
         "create_frame" | "create_rectangle" | "create_ellipse" | "create_text"
         | "create_paint_style" | "create_text_style" | "create_effect_style" | "create_grid_style"
         | "update_paint_style" | "delete_style"

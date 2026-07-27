@@ -1,5 +1,4 @@
 use rmcp::model::Tool;
-use serde_json::json;
 
 use crate::tool_helpers::*;
 

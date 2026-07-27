@@ -1,6 +1,8 @@
 import { getBounds } from "./serializers";
 import { makeSolidPaint, getParentNode, applyAutoLayout } from "./write-helpers";
 
+const isMixed = (v: unknown): v is symbol => typeof v === "symbol";
+
 export const handleWriteModifyRequest = async (request: any) => {
   switch (request.type) {
     case "set_text": {
@@ -31,8 +33,9 @@ export const handleWriteModifyRequest = async (request: any) => {
       if (!node) throw new Error(`Node not found: ${nodeId}`);
       if (!("fills" in node)) throw new Error(`Node ${nodeId} does not support fills`);
       const newFill = makeSolidPaint(p.color, p.opacity != null ? p.opacity : undefined);
+      const currentFills = (node as any).fills;
       (node as any).fills = p.mode === "append"
-        ? [...((node as any).fills as Paint[]), newFill]
+        ? [...(isMixed(currentFills) ? [] : currentFills as Paint[]), newFill]
         : [newFill];
       figma.commitUndo();
       return {
@@ -50,8 +53,9 @@ export const handleWriteModifyRequest = async (request: any) => {
       if (!node) throw new Error(`Node not found: ${nodeId}`);
       if (!("strokes" in node)) throw new Error(`Node ${nodeId} does not support strokes`);
       const newStroke = makeSolidPaint(p.color);
+      const currentStrokes = (node as any).strokes;
       (node as any).strokes = p.mode === "append"
-        ? [...((node as any).strokes as Paint[]), newStroke]
+        ? [...(isMixed(currentStrokes) ? [] : currentStrokes as Paint[]), newStroke]
         : [newStroke];
       if (p.strokeWeight != null) (node as any).strokeWeight = p.strokeWeight;
       figma.commitUndo();
@@ -104,6 +108,7 @@ export const handleWriteModifyRequest = async (request: any) => {
       const node = await figma.getNodeByIdAsync(nodeId);
       if (!node) throw new Error(`Node not found: ${nodeId}`);
       node.name = p.name;
+      figma.commitUndo();
       return {
         type: request.type,
         requestId: request.requestId,
@@ -387,9 +392,13 @@ export const handleWriteModifyRequest = async (request: any) => {
           const fontName = typeof tn.fontName === "symbol"
             ? { family: "Inter", style: "Regular" }
             : tn.fontName;
-          await figma.loadFontAsync(fontName);
-          tn.characters = newText;
-          results.push({ nodeId: tn.id, nodeName: tn.name, oldText: originalText, newText });
+          try {
+            await figma.loadFontAsync(fontName);
+            tn.characters = newText;
+            results.push({ nodeId: tn.id, nodeName: tn.name, oldText: originalText, newText });
+          } catch (e: any) {
+            results.push({ nodeId: tn.id, nodeName: tn.name, error: `Font load failed: ${e.message}` });
+          }
         }
       }
       figma.commitUndo();

@@ -1,8 +1,7 @@
 use rmcp::model::{
-    CallToolRequestParams, CallToolResult, ContentBlock, JsonObject,
+    CallToolRequestParams, CallToolResult, ContentBlock,
 };
 use serde_json::Value;
-use std::sync::Arc;
 
 use crate::types::BridgeResponse;
 
@@ -27,22 +26,6 @@ pub fn to_string_slice(raw: &[Value]) -> Vec<String> {
     raw.iter()
         .filter_map(|v| v.as_str().map(|s| s.to_string()))
         .collect()
-}
-
-/// Build an empty JSON schema (for tools with no parameters).
-pub fn empty_schema() -> Arc<JsonObject> {
-    Arc::new(
-        serde_json::from_str(r#"{"type":"object","properties":{}}"#).unwrap_or_default(),
-    )
-}
-
-/// Build a JSON schema from a serde_json::Map.
-pub fn schema_from_params(properties: serde_json::Map<String, Value>) -> Arc<JsonObject> {
-    let mut schema = serde_json::Map::new();
-    schema.insert("type".to_string(), Value::String("object".into()));
-    schema.insert("properties".to_string(), Value::Object(properties));
-    schema.insert("additionalProperties".to_string(), Value::Bool(true));
-    Arc::new(schema)
 }
 
 /// Helper to extract arguments from CallToolRequestParams as a serde_json::Map.

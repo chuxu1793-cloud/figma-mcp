@@ -13,7 +13,7 @@ pub struct Follower {
 impl Follower {
     pub fn new(leader_url: &str) -> Self {
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(35))
+            .timeout(follower_timeout())
             .build()
             .expect("failed to build reqwest client");
         Self {
@@ -88,4 +88,16 @@ impl Follower {
             }
         }
     }
+}
+
+/// Follower HTTP client timeout.
+/// Defaults to 65s (must exceed the max bridge timeout of 60s for `get_design_context`).
+/// Overridable via `FIGMA_MCP_FOLLOWER_TIMEOUT` env var (seconds).
+fn follower_timeout() -> Duration {
+    Duration::from_secs(
+        std::env::var("FIGMA_MCP_FOLLOWER_TIMEOUT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(65),
+    )
 }

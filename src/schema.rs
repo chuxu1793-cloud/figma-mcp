@@ -1,12 +1,13 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
+
 use regex::Regex;
 use serde_json::{Map, Value};
 
 /// Matches Figma node IDs:
 /// simple:   "4029:12345"
 /// compound: "I2167:9091;186:1579;186:1745" (instances/variants)
-static NODE_ID_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^I?\d+:\d+(;\d+:\d+)*$").unwrap());
+static NODE_ID_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^I?\d+:\d+(;\d+:\d+)*$").unwrap());
 
 /// Converts hyphen-format node IDs (LLM output artifact) to colon format.
 /// "4029-12345" → "4029:12345". No-ops for already-valid or unrecognized strings.
@@ -95,12 +96,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "get_reactions" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
         }
 
         "scan_nodes_by_types" => {
@@ -112,7 +108,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
                 return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_id));
             }
             let types = params.get("types").and_then(|v| v.as_array());
-            if types.map_or(true, |t| t.is_empty()) {
+            if types.is_none_or(|t| t.is_empty()) {
                 return Err("types must be a non-empty array".into());
             }
         }
@@ -122,7 +118,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         "set_opacity" => {
             validate_node_ids(node_ids)?;
             let op = params.get("opacity").and_then(|v| v.as_f64()).ok_or("opacity is required")?;
-            if op < 0.0 || op > 1.0 {
+            if !(0.0..=1.0).contains(&op) {
                 return Err("opacity must be between 0 and 1".into());
             }
         }
@@ -162,12 +158,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "create_component" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
         }
 
         "export_tokens" => {
@@ -194,12 +185,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "set_auto_layout" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
             validate_auto_layout_params(params)?;
         }
 
@@ -230,24 +216,14 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "set_text" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
             if params.get("text").and_then(|v| v.as_str()).is_none() {
                 return Err("text is required".into());
             }
         }
 
         "set_text_properties" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
         }
 
         "set_fills" | "set_strokes" => {
@@ -285,12 +261,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "rename_node" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
             let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
             if name.is_empty() {
                 return Err("name is required".into());
@@ -298,12 +269,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "clone_node" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
             if let Some(pid) = params.get("parentId").and_then(|v| v.as_str()) {
                 if !pid.is_empty() && !valid_node_id(pid) {
                     return Err(format!("parentId must use colon format e.g. 4029:12345, got: {}", pid));
@@ -444,12 +410,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         // ── Linked tools ──
 
         "apply_style_to_node" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
             let style_id = params.get("styleId").and_then(|v| v.as_str()).unwrap_or("");
             if style_id.is_empty() { return Err("styleId is required".into()); }
             if let Some(target) = params.get("target").and_then(|v| v.as_str()) {
@@ -460,12 +421,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "bind_variable_to_node" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
             let variable_id = params.get("variableId").and_then(|v| v.as_str()).unwrap_or("");
             if variable_id.is_empty() { return Err("variableId is required".into()); }
             let field = params.get("field").and_then(|v| v.as_str()).unwrap_or("");
@@ -473,12 +429,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "swap_component" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
             let component_id = params.get("componentId").and_then(|v| v.as_str()).unwrap_or("");
             if component_id.is_empty() { return Err("componentId is required".into()); }
             if !valid_node_id(component_id) {
@@ -494,12 +445,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         // ── Prototype tools ──
 
         "set_reactions" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
             let reactions = params.get("reactions").ok_or("reactions is required")?;
             let reaction_list = reactions.as_array().ok_or("reactions must be an array")?;
             if let Some(mode) = params.get("mode").and_then(|v| v.as_str()) {
@@ -514,12 +460,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "remove_reactions" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            require_single_node_id(node_ids)?;
             if let Some(raw) = params.get("indices").and_then(|v| v.as_array()) {
                 for (i, v) in raw.iter().enumerate() {
                     if v.as_f64().is_none() {
@@ -689,6 +630,17 @@ fn validate_node_ids(node_ids: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+/// Validate that node_ids contains exactly one non-empty, valid Figma node ID.
+fn require_single_node_id(node_ids: &[String]) -> Result<(), String> {
+    if node_ids.is_empty() || node_ids[0].is_empty() {
+        return Err("nodeId is required".into());
+    }
+    if !valid_node_id(&node_ids[0]) {
+        return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
+    }
+    Ok(())
+}
+
 static VALID_TRIGGER_TYPES: [&str; 9] = [
     "ON_CLICK", "ON_HOVER", "ON_PRESS", "ON_DRAG", "AFTER_TIMEOUT",
     "MOUSE_ENTER", "MOUSE_LEAVE", "MOUSE_UP", "MOUSE_DOWN",
@@ -714,10 +666,10 @@ fn validate_trigger_type(idx: usize, trigger: &Map<String, Value>) -> Result<(),
     if !t.is_empty() && !VALID_TRIGGER_TYPES.contains(&t) {
         return Err(format!("reactions[{}].trigger.type is invalid: {}", idx, t));
     }
-    if t == "AFTER_TIMEOUT" {
-        if trigger.get("timeout").and_then(|v| v.as_f64()).is_none() {
-            return Err(format!("reactions[{}].trigger.timeout is required for AFTER_TIMEOUT and must be a number (milliseconds)", idx));
-        }
+    if t == "AFTER_TIMEOUT"
+        && trigger.get("timeout").and_then(|v| v.as_f64()).is_none()
+    {
+        return Err(format!("reactions[{}].trigger.timeout is required for AFTER_TIMEOUT and must be a number (milliseconds)", idx));
     }
     Ok(())
 }

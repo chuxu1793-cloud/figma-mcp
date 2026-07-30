@@ -5,7 +5,7 @@ use std::time::Duration;
 use axum::extract::ws::{Message, WebSocket};
 use dashmap::DashMap;
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::{oneshot, Mutex, RwLock};
+use tokio::sync::{oneshot, Mutex};
 use tracing::{debug, info, warn};
 
 use crate::types::{BridgeRequest, BridgeResponse};
@@ -18,15 +18,21 @@ struct PendingEntry {
 /// Manages the single WebSocket connection from the Figma plugin
 /// and matches responses to pending requests via request IDs.
 pub struct Bridge {
-    sink: RwLock<Option<Arc<Mutex<futures_util::stream::SplitSink<WebSocket, Message>>>>>,
+    sink: Arc<Mutex<Option<futures_util::stream::SplitSink<WebSocket, Message>>>>,
     pending: Arc<DashMap<String, PendingEntry>>,
     counter: AtomicU64,
+}
+
+impl Default for Bridge {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Bridge {
     pub fn new() -> Self {
         Self {
-            sink: RwLock::new(None),
+            sink: Arc::new(Mutex::new(None)),
             pending: Arc::new(DashMap::new()),
             counter: AtomicU64::new(0),
         }
@@ -36,12 +42,12 @@ impl Bridge {
     pub async fn handle_connection(&self, ws: WebSocket) {
         let (sink, mut stream) = ws.split();
 
-        let sink = Arc::new(Mutex::new(sink));
-        let old = self.sink.write().await.replace(sink.clone());
-        if let Some(old_sink) = old {
-            if let Ok(mut s) = old_sink.try_lock() {
-                let _ = s.close().await;
-            }
+        let old = {
+            let mut guard = self.sink.lock().await;
+            guard.replace(sink)
+        };
+        if let Some(mut old_sink) = old {
+            let _ = old_sink.close().await;
             info!("plugin connected (replaced previous connection)");
         } else {
             info!("plugin connected");
@@ -52,59 +58,11 @@ impl Bridge {
         while let Some(msg) = stream.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
-                    let resp: BridgeResponse = match serde_json::from_str(&text) {
-                        Ok(r) => r,
-                        Err(e) => {
-                            warn!("failed to parse bridge response: {}", e);
-                            continue;
-                        }
-                    };
-
-                    if resp.progress > 0 && !resp.request_id.is_empty() {
-                        debug!("progress {}: {}% {}", resp.request_id, resp.progress, resp.message);
-                        if let Some(entry) = pending.get(&resp.request_id) {
-                            entry.cancel.notify_one();
-                        }
-                        continue;
-                    }
-
-                    if resp.request_id.is_empty() {
-                        warn!("received message with empty requestID — ignored");
-                        continue;
-                    }
-
-                    if let Some((_, entry)) = pending.remove(&resp.request_id) {
-                        entry.cancel.notify_one();
-                        let _ = entry.tx.send(resp);
-                    } else {
-                        debug!("← {} received but no pending entry", resp.request_id);
-                    }
+                    handle_bridge_message(&text, &pending, "text");
                 }
                 Ok(Message::Binary(data)) => {
                     let text = String::from_utf8_lossy(&data);
-                    let resp: BridgeResponse = match serde_json::from_str(&text) {
-                        Ok(r) => r,
-                        Err(e) => {
-                            warn!("failed to parse bridge response (binary): {}", e);
-                            continue;
-                        }
-                    };
-
-                    if resp.progress > 0 && !resp.request_id.is_empty() {
-                        if let Some(entry) = pending.get(&resp.request_id) {
-                            entry.cancel.notify_one();
-                        }
-                        continue;
-                    }
-
-                    if resp.request_id.is_empty() {
-                        continue;
-                    }
-
-                    if let Some((_, entry)) = pending.remove(&resp.request_id) {
-                        entry.cancel.notify_one();
-                        let _ = entry.tx.send(resp);
-                    }
+                    handle_bridge_message(&text, &pending, "binary");
                 }
                 Ok(Message::Close(_)) => {
                     info!("plugin disconnected (close frame)");
@@ -118,7 +76,10 @@ impl Bridge {
             }
         }
 
-        self.sink.write().await.take();
+        {
+            let mut guard = self.sink.lock().await;
+            guard.take();
+        }
         self.fail_all_pending("plugin disconnected");
         info!("plugin disconnected");
     }
@@ -130,10 +91,6 @@ impl Bridge {
         node_ids: Vec<String>,
         params: Option<serde_json::Map<String, serde_json::Value>>,
     ) -> Result<BridgeResponse, String> {
-        let sink_guard = self.sink.read().await;
-        let sink = sink_guard.as_ref().ok_or("plugin not connected")?.clone();
-        drop(sink_guard);
-
         let request_id = self.next_id();
         let req = BridgeRequest {
             msg_type: msg_type.to_string(),
@@ -155,19 +112,21 @@ impl Bridge {
         let json = serde_json::to_string(&req).map_err(|e| format!("serialize: {}", e))?;
 
         {
-            let mut sink = sink.lock().await;
+            let mut guard = self.sink.lock().await;
+            let sink = match guard.as_mut() {
+                Some(s) => s,
+                None => {
+                    self.pending.remove(&request_id);
+                    return Err("plugin not connected".into());
+                }
+            };
             if sink.send(Message::Text(json.into())).await.is_err() {
                 self.pending.remove(&request_id);
                 return Err("send: WebSocket write error".into());
             }
         }
 
-        let timeout_dur = if msg_type == "get_design_context" {
-            Duration::from_secs(60)
-        } else {
-            Duration::from_secs(30)
-        };
-
+        let timeout_dur = bridge_timeout(msg_type);
         let req_id = request_id.clone();
 
         tokio::select! {
@@ -186,18 +145,19 @@ impl Bridge {
 
     /// Close the bridge, rejecting all pending requests.
     pub async fn close(&self) {
-        let sink = self.sink.write().await.take();
-        if let Some(sink) = sink {
-            if let Ok(mut s) = sink.try_lock() {
-                let _ = s.close().await;
-            }
+        let sink = {
+            let mut guard = self.sink.lock().await;
+            guard.take()
+        };
+        if let Some(mut sink) = sink {
+            let _ = sink.close().await;
         }
         self.fail_all_pending("bridge closed");
     }
 
     /// Reports whether the plugin is currently connected.
     pub fn is_connected(&self) -> bool {
-        self.sink.try_read().map_or(false, |guard| guard.is_some())
+        self.sink.try_lock().is_ok_and(|guard| guard.is_some())
     }
 
     fn fail_all_pending(&self, reason: &str) {
@@ -214,12 +174,61 @@ impl Bridge {
 
     fn next_id(&self) -> String {
         let n = self.counter.fetch_add(1, Ordering::SeqCst);
-        let now = chrono_like_now();
+        let now = time_of_day();
         format!("req-{:02}{:02}{:02}-{}", now.0, now.1, now.2, n)
     }
 }
 
-fn chrono_like_now() -> (u32, u32, u32) {
+/// Parse a bridge response message and dispatch it to the matching pending request.
+/// Extracted to unify Text and Binary message handling.
+fn handle_bridge_message(text: &str, pending: &DashMap<String, PendingEntry>, source: &str) {
+    let resp: BridgeResponse = match serde_json::from_str(text) {
+        Ok(r) => r,
+        Err(e) => {
+            warn!("failed to parse bridge response ({}): {}", source, e);
+            return;
+        }
+    };
+
+    if resp.progress > 0 && !resp.request_id.is_empty() {
+        debug!("progress {}: {}% {}", resp.request_id, resp.progress, resp.message);
+        if let Some(entry) = pending.get(&resp.request_id) {
+            entry.cancel.notify_one();
+        }
+        return;
+    }
+
+    if resp.request_id.is_empty() {
+        warn!("received message with empty requestID — ignored");
+        return;
+    }
+
+    if let Some((_, entry)) = pending.remove(&resp.request_id) {
+        entry.cancel.notify_one();
+        let _ = entry.tx.send(resp);
+    } else {
+        debug!("← {} received but no pending entry", resp.request_id);
+    }
+}
+
+/// Bridge timeout for a given message type.
+/// `get_design_context` defaults to 60s; all others default to 30s.
+/// Overridable via `FIGMA_MCP_TIMEOUT_DESIGN_CONTEXT` and `FIGMA_MCP_TIMEOUT` env vars (seconds).
+fn bridge_timeout(msg_type: &str) -> Duration {
+    let (default, env_key) = if msg_type == "get_design_context" {
+        (60u64, "FIGMA_MCP_TIMEOUT_DESIGN_CONTEXT")
+    } else {
+        (30u64, "FIGMA_MCP_TIMEOUT")
+    };
+    Duration::from_secs(
+        std::env::var(env_key)
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(default),
+    )
+}
+
+fn time_of_day() -> (u32, u32, u32) {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)

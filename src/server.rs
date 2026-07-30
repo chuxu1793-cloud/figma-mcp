@@ -70,7 +70,7 @@ impl FigmaMcpServer {
             .send(name, node_ids, &mut Some(params_map))
             .await;
 
-        render_response(result.map_err(|e| e))
+        render_response(result)
     }
 
     async fn handle_get_screenshot_to_file(&self, args: &serde_json::Map<String, Value>) -> CallToolResult {
@@ -150,7 +150,7 @@ impl FigmaMcpServer {
 
         let raw_node_ids = args.get("nodeIds").and_then(|v| v.as_array()).cloned().unwrap_or_default();
         let node_ids: Vec<String> = raw_node_ids.iter()
-            .filter_map(|v| v.as_str().map(|s| normalize_node_id(s)))
+            .filter_map(|v| v.as_str().map(normalize_node_id))
             .collect();
         let output_path = args.get("outputPath").and_then(|v| v.as_str()).unwrap_or("");
 
@@ -281,29 +281,37 @@ impl ServerHandler for FigmaMcpServer {
 }
 
 /// Build (node_ids, params) from MCP arguments based on tool name.
+/// Delegates to per-category builder functions; falls back to passthrough.
 fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<String>, serde_json::Map<String, Value>) {
+    build_read_rpc_params(tool, args)
+        .or_else(|| build_create_rpc_params(tool, args))
+        .or_else(|| build_modify_rpc_params(tool, args))
+        .or_else(|| build_style_rpc_params(tool, args))
+        .or_else(|| build_variable_rpc_params(tool, args))
+        .or_else(|| build_prototype_rpc_params(tool, args))
+        .or_else(|| build_page_rpc_params(tool, args))
+        .unwrap_or_else(|| (vec![], args.clone()))
+}
+
+fn build_read_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> Option<(Vec<String>, serde_json::Map<String, Value>)> {
     use crate::schema::normalize_node_id;
 
     match tool {
-        // Simple tools: no params, no node_ids
         "get_pages" | "get_metadata" | "get_selection" | "get_viewport"
         | "get_fonts" | "get_styles" | "get_variable_defs" | "get_local_components" => {
-            (vec![], serde_json::Map::new())
+            Some((vec![], serde_json::Map::new()))
         }
 
-        // Tools with nodeId parameter
         "get_reactions" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
-            (vec![node_id], serde_json::Map::new())
+            Some((vec![node_id], serde_json::Map::new()))
         }
 
-        // Tools with nodeIds parameter
         "get_nodes_info" | "export_frames_to_pdf" => {
             let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
-            (ids, serde_json::Map::new())
+            Some((ids, serde_json::Map::new()))
         }
 
-        // get_design_context
         "get_design_context" => {
             let mut params = serde_json::Map::new();
             if let Some(d) = get_f64(args, "depth") {
@@ -314,10 +322,9 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
             if let Some(dd) = get_bool(args, "dedupe_components") {
                 if dd { params.insert("dedupeComponents".into(), Value::Bool(true)); }
             }
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        // search_nodes
         "search_nodes" => {
             let mut params = serde_json::Map::new();
             params.insert("query".into(), Value::String(get_str(args, "query")));
@@ -329,20 +336,18 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
             if let Some(limit) = get_f64(args, "limit") {
                 if limit > 0.0 { params.insert("limit".into(), serde_json::json!(limit)); }
             }
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        // scan_nodes_by_types
         "scan_nodes_by_types" => {
             let mut params = serde_json::Map::new();
             params.insert("nodeId".into(), Value::String(get_str(args, "nodeId")));
             if let Some(raw) = args.get("types").cloned() {
                 params.insert("types".into(), raw);
             }
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        // get_screenshot
         "get_screenshot" => {
             let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
@@ -351,38 +356,36 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
             if let Some(s) = get_f64(args, "scale") {
                 if s > 0.0 { params.insert("scale".into(), serde_json::json!(s)); }
             }
-            (ids, params)
+            Some((ids, params))
         }
 
-        // get_annotations
         "get_annotations" => {
             let mut params = serde_json::Map::new();
             let id = get_str(args, "nodeId");
             if !id.is_empty() { params.insert("nodeId".into(), Value::String(id)); }
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        // export_tokens
         "export_tokens" => {
             let mut params = serde_json::Map::new();
             let f = get_str(args, "format");
             if !f.is_empty() { params.insert("format".into(), Value::String(f)); }
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        // create_frame, create_rectangle, create_ellipse, create_text
-        // — pass all arguments as params
+        _ => None,
+    }
+}
+
+fn build_create_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> Option<(Vec<String>, serde_json::Map<String, Value>)> {
+    use crate::schema::normalize_node_id;
+
+    match tool {
         "create_frame" | "create_rectangle" | "create_ellipse" | "create_text"
-        | "create_line" | "create_star" | "create_polygon"
-        | "create_paint_style" | "create_text_style" | "create_effect_style" | "create_grid_style"
-        | "update_paint_style" | "update_text_style" | "update_effect_style" | "update_grid_style"
-        | "delete_style"
-        | "create_variable_collection" | "add_variable_mode" | "create_variable"
-        | "set_variable_value" | "delete_variable" => {
-            (vec![], args.clone())
+        | "create_line" | "create_star" | "create_polygon" => {
+            Some((vec![], args.clone()))
         }
 
-        // import_image
         "import_image" => {
             let mut params = serde_json::Map::new();
             params.insert("imageData".into(), args.get("imageData").cloned().unwrap_or(Value::Null));
@@ -393,18 +396,16 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
             copy_opt_str(args, &mut params, "name");
             copy_opt_str(args, &mut params, "scaleMode");
             copy_opt_str(args, &mut params, "parentId");
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        // create_component
         "create_component" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             let mut params = serde_json::Map::new();
             copy_opt_str(args, &mut params, "name");
-            (vec![node_id], params)
+            Some((vec![node_id], params))
         }
 
-        // create_section
         "create_section" => {
             let mut params = serde_json::Map::new();
             copy_opt_str(args, &mut params, "name");
@@ -412,24 +413,29 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
             copy_opt_f64(args, &mut params, "y");
             copy_opt_f64(args, &mut params, "width");
             copy_opt_f64(args, &mut params, "height");
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        // set_text
+        _ => None,
+    }
+}
+
+fn build_modify_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> Option<(Vec<String>, serde_json::Map<String, Value>)> {
+    use crate::schema::normalize_node_id;
+
+    match tool {
         "set_text" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             let mut params = serde_json::Map::new();
             params.insert("text".into(), Value::String(get_str(args, "text")));
-            (vec![node_id], params)
+            Some((vec![node_id], params))
         }
 
-        // set_text_properties
         "set_text_properties" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
-            (vec![node_id], args.clone())
+            Some((vec![node_id], args.clone()))
         }
 
-        // set_fills, set_strokes
         "set_fills" | "set_strokes" => {
             let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
@@ -437,14 +443,12 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
             copy_opt_f64(args, &mut params, "opacity");
             copy_opt_f64(args, &mut params, "strokeWeight");
             copy_opt_str(args, &mut params, "mode");
-            (ids, params)
+            Some((ids, params))
         }
 
-        // move_nodes, resize_nodes, delete_nodes, set_visible, set_locked
-        // rotate_nodes, reorder_nodes, set_blend_mode, set_constraints, batch_rename_nodes
-        // ungroup_nodes, group_nodes, detach_instance
-        "move_nodes" | "resize_nodes" | "delete_nodes" | "set_visible" | "set_locked" | "rotate_nodes" | "reorder_nodes" | "set_blend_mode"
-        | "set_constraints" | "batch_rename_nodes" | "ungroup_nodes" | "detach_instance" => {
+        "move_nodes" | "resize_nodes" | "delete_nodes" | "set_visible" | "set_locked"
+        | "rotate_nodes" | "reorder_nodes" | "set_blend_mode" | "set_constraints"
+        | "batch_rename_nodes" | "ungroup_nodes" | "detach_instance" => {
             let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
             match tool {
@@ -464,69 +468,61 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
                 }
                 _ => {}
             }
-            (ids, params)
+            Some((ids, params))
         }
 
-        // group_nodes
         "group_nodes" => {
             let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
             copy_opt_str(args, &mut params, "name");
-            (ids, params)
+            Some((ids, params))
         }
 
-        // rename_node
         "rename_node" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             let mut params = serde_json::Map::new();
             params.insert("name".into(), Value::String(get_str(args, "name")));
-            (vec![node_id], params)
+            Some((vec![node_id], params))
         }
 
-        // clone_node
         "clone_node" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             let mut params = serde_json::Map::new();
             copy_opt_f64(args, &mut params, "x");
             copy_opt_f64(args, &mut params, "y");
             copy_opt_str(args, &mut params, "parentId");
-            (vec![node_id], params)
+            Some((vec![node_id], params))
         }
 
-        // set_opacity
         "set_opacity" => {
             let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
             if let Some(v) = get_f64(args, "opacity") { params.insert("opacity".into(), serde_json::json!(v)); }
-            (ids, params)
+            Some((ids, params))
         }
 
-        // set_corner_radius
         "set_corner_radius" => {
             let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
             for k in &["cornerRadius", "topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"] {
                 copy_opt_f64(args, &mut params, k);
             }
-            (ids, params)
+            Some((ids, params))
         }
 
-        // set_auto_layout
         "set_auto_layout" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
-            (vec![node_id], args.clone())
+            Some((vec![node_id], args.clone()))
         }
 
-        // reparent_nodes
         "reparent_nodes" => {
             let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
             let pid = normalize_node_id(&get_str(args, "parentId"));
             params.insert("parentId".into(), Value::String(pid));
-            (ids, params)
+            Some((ids, params))
         }
 
-        // find_replace_text
         "find_replace_text" => {
             let mut params = serde_json::Map::new();
             params.insert("find".into(), args.get("find").cloned().unwrap_or(Value::Null));
@@ -538,103 +534,134 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
             if !node_id.is_empty() {
                 node_ids.push(normalize_node_id(&node_id));
             }
-            (node_ids, params)
+            Some((node_ids, params))
         }
 
-        // navigate_to_page
-        "navigate_to_page" => {
+        "set_effects" => {
+            let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
-            copy_opt_str(args, &mut params, "pageId");
-            copy_opt_str(args, &mut params, "pageName");
-            (vec![], params)
+            params.insert("effects".into(), args.get("effects").cloned().unwrap_or(Value::Null));
+            Some((ids, params))
         }
 
-        // swap_component
         "swap_component" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             let component_id = normalize_node_id(&get_str(args, "componentId"));
             let mut params = serde_json::Map::new();
             params.insert("componentId".into(), Value::String(component_id));
-            (vec![node_id], params)
+            Some((vec![node_id], params))
         }
 
-        // apply_style_to_node
+        _ => None,
+    }
+}
+
+fn build_style_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> Option<(Vec<String>, serde_json::Map<String, Value>)> {
+    use crate::schema::normalize_node_id;
+
+    match tool {
+        "create_paint_style" | "create_text_style" | "create_effect_style" | "create_grid_style"
+        | "update_paint_style" | "update_text_style" | "update_effect_style" | "update_grid_style"
+        | "delete_style" => {
+            Some((vec![], args.clone()))
+        }
+
         "apply_style_to_node" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             let mut params = serde_json::Map::new();
             params.insert("styleId".into(), args.get("styleId").cloned().unwrap_or(Value::Null));
             copy_opt_str(args, &mut params, "target");
-            (vec![node_id], params)
+            Some((vec![node_id], params))
         }
 
-        // set_effects
-        "set_effects" => {
-            let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
-            let mut params = serde_json::Map::new();
-            params.insert("effects".into(), args.get("effects").cloned().unwrap_or(Value::Null));
-            (ids, params)
+        _ => None,
+    }
+}
+
+fn build_variable_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> Option<(Vec<String>, serde_json::Map<String, Value>)> {
+    use crate::schema::normalize_node_id;
+
+    match tool {
+        "create_variable_collection" | "add_variable_mode" | "create_variable"
+        | "set_variable_value" | "delete_variable" => {
+            Some((vec![], args.clone()))
         }
 
-        // bind_variable_to_node
         "bind_variable_to_node" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             let mut params = serde_json::Map::new();
             params.insert("variableId".into(), args.get("variableId").cloned().unwrap_or(Value::Null));
             params.insert("field".into(), args.get("field").cloned().unwrap_or(Value::Null));
-            (vec![node_id], params)
+            Some((vec![node_id], params))
         }
 
-        // set_reactions
+        _ => None,
+    }
+}
+
+fn build_prototype_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> Option<(Vec<String>, serde_json::Map<String, Value>)> {
+    use crate::schema::normalize_node_id;
+
+    match tool {
         "set_reactions" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             let mut params = serde_json::Map::new();
             params.insert("reactions".into(), args.get("reactions").cloned().unwrap_or(Value::Null));
             copy_opt_str(args, &mut params, "mode");
-            (vec![node_id], params)
+            Some((vec![node_id], params))
         }
 
-        // remove_reactions
         "remove_reactions" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             let mut params = serde_json::Map::new();
             if let Some(indices) = args.get("indices").cloned() {
                 params.insert("indices".into(), indices);
             }
-            (vec![node_id], params)
+            Some((vec![node_id], params))
         }
 
-        // add_page
+        _ => None,
+    }
+}
+
+fn build_page_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> Option<(Vec<String>, serde_json::Map<String, Value>)> {
+    match tool {
+        "navigate_to_page" => {
+            let mut params = serde_json::Map::new();
+            copy_opt_str(args, &mut params, "pageId");
+            copy_opt_str(args, &mut params, "pageName");
+            Some((vec![], params))
+        }
+
         "add_page" => {
             let mut params = serde_json::Map::new();
             copy_opt_str(args, &mut params, "name");
             if let Some(idx) = get_f64(args, "index") { params.insert("index".into(), serde_json::json!(idx)); }
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        // delete_page
         "delete_page" => {
             let mut params = serde_json::Map::new();
             copy_opt_str(args, &mut params, "pageId");
             copy_opt_str(args, &mut params, "pageName");
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        // rename_page
         "rename_page" => {
             let mut params = serde_json::Map::new();
             copy_opt_str(args, &mut params, "pageId");
             copy_opt_str(args, &mut params, "pageName");
             copy_opt_str(args, &mut params, "newName");
-            (vec![], params)
+            Some((vec![], params))
         }
 
-        _ => (vec![], args.clone()),
+        _ => None,
     }
 }
 
 fn copy_opt_str(args: &serde_json::Map<String, Value>, params: &mut serde_json::Map<String, Value>, key: &str) {
     if let Some(v) = args.get(key) {
-        if v.as_str().map_or(true, |s| !s.is_empty()) {
+        if v.as_str().is_none_or(|s| !s.is_empty()) {
             params.insert(key.to_string(), v.clone());
         }
     }
@@ -643,5 +670,288 @@ fn copy_opt_str(args: &serde_json::Map<String, Value>, params: &mut serde_json::
 fn copy_opt_f64(args: &serde_json::Map<String, Value>, params: &mut serde_json::Map<String, Value>, key: &str) {
     if let Some(v) = args.get(key).and_then(|v| v.as_f64()) {
         params.insert(key.to_string(), serde_json::json!(v));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn make_args(pairs: &[(&str, Value)]) -> serde_json::Map<String, Value> {
+        let mut m = serde_json::Map::new();
+        for (k, v) in pairs {
+            m.insert((*k).to_string(), v.clone());
+        }
+        m
+    }
+
+    // ── Read tools ──
+
+    #[test]
+    fn test_build_rpc_simple_no_params() {
+        let args = serde_json::Map::new();
+        for tool in &["get_pages", "get_metadata", "get_selection", "get_viewport",
+                       "get_fonts", "get_styles", "get_variable_defs", "get_local_components"] {
+            let (ids, params) = build_rpc_params(tool, &args);
+            assert!(ids.is_empty(), "{} should have no node_ids", tool);
+            assert!(params.is_empty(), "{} should have no params", tool);
+        }
+    }
+
+    #[test]
+    fn test_build_rpc_get_reactions() {
+        let args = make_args(&[("nodeId", json!("4029:12345"))]);
+        let (ids, params) = build_rpc_params("get_reactions", &args);
+        assert_eq!(ids, vec!["4029:12345"]);
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn test_build_rpc_get_nodes_info() {
+        let args = make_args(&[("nodeIds", json!(["1:2", "3:4"]))]);
+        let (ids, params) = build_rpc_params("get_nodes_info", &args);
+        assert_eq!(ids, vec!["1:2", "3:4"]);
+        assert!(params.is_empty());
+    }
+
+    #[test]
+    fn test_build_rpc_get_nodes_info_hyphen_normalized() {
+        let args = make_args(&[("nodeIds", json!(["1-2"]))]);
+        let (ids, _) = build_rpc_params("get_nodes_info", &args);
+        assert_eq!(ids, vec!["1:2"]);
+    }
+
+    #[test]
+    fn test_build_rpc_get_design_context() {
+        let args = make_args(&[
+            ("depth", json!(3)),
+            ("detail", json!("compact")),
+            ("dedupe_components", json!(true)),
+        ]);
+        let (ids, params) = build_rpc_params("get_design_context", &args);
+        assert!(ids.is_empty());
+        assert_eq!(params.get("depth").unwrap(), &json!(3.0));
+        assert_eq!(params.get("detail").unwrap(), &json!("compact"));
+        assert_eq!(params.get("dedupeComponents").unwrap(), &json!(true));
+    }
+
+    #[test]
+    fn test_build_rpc_search_nodes() {
+        let args = make_args(&[("query", json!("button"))]);
+        let (ids, params) = build_rpc_params("search_nodes", &args);
+        assert!(ids.is_empty());
+        assert_eq!(params.get("query").unwrap(), &json!("button"));
+    }
+
+    #[test]
+    fn test_build_rpc_get_screenshot() {
+        let args = make_args(&[
+            ("nodeIds", json!(["10:20"])),
+            ("format", json!("PNG")),
+            ("scale", json!(2.0)),
+        ]);
+        let (ids, params) = build_rpc_params("get_screenshot", &args);
+        assert_eq!(ids, vec!["10:20"]);
+        assert_eq!(params.get("format").unwrap(), &json!("PNG"));
+        assert_eq!(params.get("scale").unwrap(), &json!(2.0));
+    }
+
+    // ── Create tools ──
+
+    #[test]
+    fn test_build_rpc_create_frame_passthrough() {
+        let args = make_args(&[("width", json!(100.0)), ("height", json!(200.0))]);
+        let (ids, params) = build_rpc_params("create_frame", &args);
+        assert!(ids.is_empty());
+        assert_eq!(params.get("width").unwrap(), &json!(100.0));
+        assert_eq!(params.get("height").unwrap(), &json!(200.0));
+    }
+
+    #[test]
+    fn test_build_rpc_import_image() {
+        let args = make_args(&[
+            ("imageData", json!("base64data")),
+            ("x", json!(10.0)),
+            ("y", json!(20.0)),
+            ("width", json!(100.0)),
+            ("height", json!(100.0)),
+            ("name", json!("test")),
+            ("scaleMode", json!("FILL")),
+            ("parentId", json!("5:6")),
+        ]);
+        let (ids, params) = build_rpc_params("import_image", &args);
+        assert!(ids.is_empty());
+        assert_eq!(params.get("imageData").unwrap(), &json!("base64data"));
+        assert_eq!(params.get("x").unwrap(), &json!(10.0));
+        assert_eq!(params.get("scaleMode").unwrap(), &json!("FILL"));
+        assert_eq!(params.get("parentId").unwrap(), &json!("5:6"));
+    }
+
+    #[test]
+    fn test_build_rpc_create_component() {
+        let args = make_args(&[("nodeId", json!("7:8")), ("name", json!("Button"))]);
+        let (ids, params) = build_rpc_params("create_component", &args);
+        assert_eq!(ids, vec!["7:8"]);
+        assert_eq!(params.get("name").unwrap(), &json!("Button"));
+    }
+
+    // ── Modify tools ──
+
+    #[test]
+    fn test_build_rpc_set_text() {
+        let args = make_args(&[("nodeId", json!("1:2")), ("text", json!("hello"))]);
+        let (ids, params) = build_rpc_params("set_text", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("text").unwrap(), &json!("hello"));
+    }
+
+    #[test]
+    fn test_build_rpc_set_fills() {
+        let args = make_args(&[
+            ("nodeIds", json!(["1:2", "3:4"])),
+            ("color", json!("#FF5733")),
+            ("opacity", json!(0.5)),
+        ]);
+        let (ids, params) = build_rpc_params("set_fills", &args);
+        assert_eq!(ids, vec!["1:2", "3:4"]);
+        assert_eq!(params.get("color").unwrap(), &json!("#FF5733"));
+        assert_eq!(params.get("opacity").unwrap(), &json!(0.5));
+    }
+
+    #[test]
+    fn test_build_rpc_move_nodes() {
+        let args = make_args(&[
+            ("nodeIds", json!(["1:2"])),
+            ("x", json!(100.0)),
+            ("y", json!(200.0)),
+        ]);
+        let (ids, params) = build_rpc_params("move_nodes", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("x").unwrap(), &json!(100.0));
+        assert_eq!(params.get("y").unwrap(), &json!(200.0));
+    }
+
+    #[test]
+    fn test_build_rpc_rename_node() {
+        let args = make_args(&[("nodeId", json!("1:2")), ("name", json!("NewName"))]);
+        let (ids, params) = build_rpc_params("rename_node", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("name").unwrap(), &json!("NewName"));
+    }
+
+    #[test]
+    fn test_build_rpc_clone_node() {
+        let args = make_args(&[
+            ("nodeId", json!("1:2")),
+            ("x", json!(50.0)),
+            ("parentId", json!("3:4")),
+        ]);
+        let (ids, params) = build_rpc_params("clone_node", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("x").unwrap(), &json!(50.0));
+        assert_eq!(params.get("parentId").unwrap(), &json!("3:4"));
+    }
+
+    #[test]
+    fn test_build_rpc_set_auto_layout_passthrough() {
+        let args = make_args(&[("nodeId", json!("1:2")), ("layoutMode", json!("HORIZONTAL"))]);
+        let (ids, params) = build_rpc_params("set_auto_layout", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("layoutMode").unwrap(), &json!("HORIZONTAL"));
+    }
+
+    #[test]
+    fn test_build_rpc_swap_component() {
+        let args = make_args(&[
+            ("nodeId", json!("1:2")),
+            ("componentId", json!("3:4")),
+        ]);
+        let (ids, params) = build_rpc_params("swap_component", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("componentId").unwrap(), &json!("3:4"));
+    }
+
+    // ── Style tools ──
+
+    #[test]
+    fn test_build_rpc_apply_style_to_node() {
+        let args = make_args(&[
+            ("nodeId", json!("1:2")),
+            ("styleId", json!("S:123")),
+            ("target", json!("fill")),
+        ]);
+        let (ids, params) = build_rpc_params("apply_style_to_node", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("styleId").unwrap(), &json!("S:123"));
+        assert_eq!(params.get("target").unwrap(), &json!("fill"));
+    }
+
+    // ── Variable tools ──
+
+    #[test]
+    fn test_build_rpc_bind_variable_to_node() {
+        let args = make_args(&[
+            ("nodeId", json!("1:2")),
+            ("variableId", json!("V:42")),
+            ("field", json!("fillColor")),
+        ]);
+        let (ids, params) = build_rpc_params("bind_variable_to_node", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("variableId").unwrap(), &json!("V:42"));
+        assert_eq!(params.get("field").unwrap(), &json!("fillColor"));
+    }
+
+    // ── Prototype tools ──
+
+    #[test]
+    fn test_build_rpc_set_reactions() {
+        let reactions = json!([{"trigger": {"type": "ON_CLICK"}}]);
+        let args = make_args(&[
+            ("nodeId", json!("1:2")),
+            ("reactions", reactions.clone()),
+            ("mode", json!("replace")),
+        ]);
+        let (ids, params) = build_rpc_params("set_reactions", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("reactions").unwrap(), &reactions);
+        assert_eq!(params.get("mode").unwrap(), &json!("replace"));
+    }
+
+    #[test]
+    fn test_build_rpc_remove_reactions() {
+        let args = make_args(&[("nodeId", json!("1:2")), ("indices", json!([0, 1]))]);
+        let (ids, params) = build_rpc_params("remove_reactions", &args);
+        assert_eq!(ids, vec!["1:2"]);
+        assert_eq!(params.get("indices").unwrap(), &json!([0, 1]));
+    }
+
+    // ── Page tools ──
+
+    #[test]
+    fn test_build_rpc_add_page() {
+        let args = make_args(&[("name", json!("My Page")), ("index", json!(2.0))]);
+        let (ids, params) = build_rpc_params("add_page", &args);
+        assert!(ids.is_empty());
+        assert_eq!(params.get("name").unwrap(), &json!("My Page"));
+        assert_eq!(params.get("index").unwrap(), &json!(2.0));
+    }
+
+    #[test]
+    fn test_build_rpc_navigate_to_page() {
+        let args = make_args(&[("pageId", json!("0:2"))]);
+        let (ids, params) = build_rpc_params("navigate_to_page", &args);
+        assert!(ids.is_empty());
+        assert_eq!(params.get("pageId").unwrap(), &json!("0:2"));
+    }
+
+    // ── Fallback ──
+
+    #[test]
+    fn test_build_rpc_unknown_tool_passthrough() {
+        let args = make_args(&[("foo", json!("bar"))]);
+        let (ids, params) = build_rpc_params("unknown_tool", &args);
+        assert!(ids.is_empty());
+        assert_eq!(params.get("foo").unwrap(), &json!("bar"));
     }
 }

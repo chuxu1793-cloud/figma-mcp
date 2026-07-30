@@ -107,7 +107,7 @@ impl Node {
         drop(leader_guard);
         drop(role_guard);
 
-    if let Some(mut old) = old_leader {
+        if let Some(mut old) = old_leader {
             old.stop().await;
         }
         info!("became LEADER");

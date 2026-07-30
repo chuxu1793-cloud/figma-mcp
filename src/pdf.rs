@@ -12,6 +12,17 @@ pub fn merge_pdf_pages(pages: &[Vec<u8>]) -> Result<Vec<u8>, String> {
     let mut base = lopdf::Document::load_mem(&pages[0])
         .map_err(|e| format!("load first PDF: {}", e))?;
 
+    // Resolve the Pages object ID from the catalog once, outside the loop.
+    let pages_id = base.catalog().ok().and_then(|dict| {
+        dict.get(b"Pages").ok().and_then(|o| {
+            if let lopdf::Object::Reference(id) = o {
+                Some(*id)
+            } else {
+                None
+            }
+        })
+    });
+
     for (i, page_bytes) in pages.iter().enumerate().skip(1) {
         let doc = lopdf::Document::load_mem(page_bytes)
             .map_err(|e| format!("load PDF page {}: {}", i, e))?;
@@ -28,27 +39,10 @@ pub fn merge_pdf_pages(pages: &[Vec<u8>]) -> Result<Vec<u8>, String> {
 
         for page_id in src_page_ids {
             if let Some(&new_page_id) = object_map.get(&page_id) {
-                // Get Pages object ID from catalog
-                let catalog_dict = base.catalog();
-                if let Ok(dict) = catalog_dict {
-                    let pages_ref = dict.get(b"Pages").ok()
-                        .and_then(|o| {
-                            if let lopdf::Object::Reference(id) = o {
-                                Some(*id)
-                            } else {
-                                None
-                            }
-                        });
-
-                    if let Some(pages_id) = pages_ref {
-                        if let Ok(obj) = base.get_object_mut(pages_id) {
-                            if let lopdf::Object::Dictionary(ref mut dict) = obj {
-                                if let Ok(kids_val) = dict.get_mut(b"Kids") {
-                                    if let lopdf::Object::Array(ref mut kids) = kids_val {
-                                        kids.push(lopdf::Object::Reference(new_page_id));
-                                    }
-                                }
-                            }
+                if let Some(pages_id) = pages_id {
+                    if let Ok(lopdf::Object::Dictionary(ref mut dict)) = base.get_object_mut(pages_id) {
+                        if let Ok(lopdf::Object::Array(ref mut kids)) = dict.get_mut(b"Kids") {
+                            kids.push(lopdf::Object::Reference(new_page_id));
                         }
                     }
                 }

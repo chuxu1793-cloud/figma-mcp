@@ -15,7 +15,7 @@ pub struct BridgeRequest {
 }
 
 fn params_is_empty_or_none(opt: &Option<serde_json::Map<String, Value>>) -> bool {
-    opt.as_ref().map_or(true, |m| m.is_empty())
+    opt.as_ref().is_none_or(|m| m.is_empty())
 }
 
 /// Received from the Figma plugin over WebSocket.

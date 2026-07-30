@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 pub mod bridge;
 pub mod election;
 pub mod follower;

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use rand::Rng;
 use tokio::sync::Notify;
 use tracing::info;
 
@@ -38,10 +37,7 @@ impl Election {
 
         tokio::spawn(async move {
             loop {
-                let jitter = {
-                    let mut rng = rand::thread_rng();
-                    Duration::from_millis(rng.gen_range(3000..5000))
-                };
+                let jitter = election_jitter();
                 tokio::select! {
                     _ = tokio::time::sleep(jitter) => {}
                     _ = notify.notified() => { return; }
@@ -96,4 +92,21 @@ impl Election {
         info!("port taken but leader not responding — will retry");
         Ok(())
     }
+}
+
+/// Election monitor jitter delay.
+/// Defaults to 3000–5000ms.
+/// Overridable via `FIGMA_MCP_ELECTION_JITTER_MIN` and `FIGMA_MCP_ELECTION_JITTER_MAX` env vars (milliseconds).
+fn election_jitter() -> Duration {
+    let min = env_u64("FIGMA_MCP_ELECTION_JITTER_MIN", 3000);
+    let max = env_u64("FIGMA_MCP_ELECTION_JITTER_MAX", 5000);
+    let bound = if max > min { max - min } else { 1 };
+    Duration::from_millis(min + fastrand::u64(0..bound))
+}
+
+fn env_u64(key: &str, default: u64) -> u64 {
+    std::env::var(key)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(default)
 }

@@ -2,9 +2,9 @@
 
 Figma MCP — Free, No Rate Limits (Rust Edition)
 <p>
-  <a href="https://www.npmjs.com/package/@tuanjie/figma-mcp"><img src="https://img.shields.io/npm/v/@tuanjie/figma-mcp?color=blue" alt="npm version" /></a>
+  <a href="https://github.com/chuxu1793-cloud/figma-mcp/releases"><img src="https://img.shields.io/github/v/release/chuxu1793-cloud/figma-mcp?color=blue" alt="release version" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
-  <a href="https://github.com/tuanjie/figma-mcp/stargazers"><img src="https://img.shields.io/github/stars/tuanjie/figma-mcp?style=social" alt="GitHub stars" /></a>
+  <a href="https://github.com/chuxu1793-cloud/figma-mcp/stargazers"><img src="https://img.shields.io/github/stars/chuxu1793-cloud/figma-mcp?style=social" alt="GitHub stars" /></a>
 </p>
 
 Open-source Figma MCP server written in Rust, with full read/write access via plugin — no REST API, no rate limits. Turn text into designs and designs into real code. Works with Cursor, Claude, GitHub Copilot, and any MCP-compatible AI tool.
@@ -21,25 +21,57 @@ Open-source Figma MCP server written in Rust, with full read/write access via pl
 
 ## Installation & Setup
 
-### 1. Configure your AI tool
+### 1. Install via install script (recommended)
+
+```bash
+curl -sL https://raw.githubusercontent.com/chuxu1793-cloud/figma-mcp/main/install.sh | bash
+```
+
+This will download the pre-compiled binary and Figma plugin to `~/figma/`.
+
+To install to a custom directory:
+
+```bash
+curl -sL https://raw.githubusercontent.com/chuxu1793-cloud/figma-mcp/main/install.sh | bash -s -- /custom/path
+```
+
+### Or: Manual install
+
+```bash
+# Create install directory
+mkdir -p ~/figma && cd ~/figma
+
+# Download binary (macOS Apple Silicon example)
+curl -L -o figma-mcp https://github.com/chuxu1793-cloud/figma-mcp/releases/latest/download/figma-mcp-darwin-arm64
+chmod +x figma-mcp
+
+# Download plugin
+curl -L -o figma-plugin.zip https://github.com/chuxu1793-cloud/figma-mcp/releases/latest/download/figma-plugin.zip
+unzip figma-plugin.zip -d plugin
+```
+
+Available binaries by platform:
+
+| Platform | File |
+|----------|------|
+| macOS Apple Silicon | `figma-mcp-darwin-arm64` |
+| macOS Intel | `figma-mcp-darwin-amd64` |
+| Linux x86_64 | `figma-mcp-linux-amd64` |
+| Windows x86_64 | `figma-mcp-windows-amd64.exe` |
+
+### 2. Configure your AI tool
 
 **Claude Code CLI**
 ```bash
-claude mcp add -s project figma-mcp -- npx -y @tuanjie/figma-mcp@latest
-```
-
-**Codex CLI**
-```bash
-codex mcp add figma-mcp -- npx -y @tuanjie/figma-mcp@latest
+claude mcp add -s project figma -- ~/figma/figma-mcp
 ```
 
 **.mcp.json** (Claude and other MCP-compatible tools)
 ```json
 {
   "mcpServers": {
-    "figma-mcp": {
-      "command": "npx",
-      "args": ["-y", "@tuanjie/figma-mcp"]
+    "figma": {
+      "command": "/Users/YOUR_USERNAME/figma/figma-mcp"
     }
   }
 }
@@ -49,19 +81,20 @@ codex mcp add figma-mcp -- npx -y @tuanjie/figma-mcp@latest
 ```json
 {
   "servers": {
-    "figma-mcp": {
+    "figma": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "@tuanjie/figma-mcp"]
+      "command": "/Users/YOUR_USERNAME/figma/figma-mcp"
     }
   }
 }
 ```
 
-### 2. Install the Figma plugin
+> Replace `/Users/YOUR_USERNAME/figma/figma-mcp` with the actual path where you installed the binary.
+
+### 3. Install the Figma plugin
 
 1. In Figma Desktop: **Plugins → Development → Import plugin from manifest**
-2. Select `manifest.json` from the [plugin.zip](https://github.com/tuanjie/figma-mcp/releases)
+2. Select `~/figma/plugin/manifest.json`
 3. Run the plugin inside any Figma file
 
 ---
@@ -113,11 +146,11 @@ The Rust server acts as an MCP server over stdio, and maintains a WebSocket brid
 ## Building from Source
 
 ```bash
-# Build
+# Build Rust binary
 cargo build --release
 
-# Run
-./target/release/figma-mcp --ip 127.0.0.1 --port 1994
+# Build Figma plugin
+cd plugin && bun install && bun run build
 
 # Test
 cargo test

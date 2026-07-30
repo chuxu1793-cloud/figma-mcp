@@ -59,7 +59,7 @@ pub struct RPCResponse {
 }
 
 /// Role of this server process.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Role {
     Unknown,
     Leader,

@@ -67,7 +67,7 @@ impl FigmaMcpServer {
 
         let result = self
             .node
-            .send(name, node_ids, &mut Some(params_map))
+            .send(name, node_ids, Some(params_map))
             .await;
 
         render_response(result)
@@ -106,7 +106,7 @@ impl FigmaMcpServer {
         if scale > 0.0 { params.insert("scale".to_string(), serde_json::json!(scale)); }
 
         let ids = if node_ids.is_empty() { vec![] } else { node_ids.clone() };
-        let result = self.node.send("get_screenshot", ids, &mut Some(params)).await;
+        let result = self.node.send("get_screenshot", ids, Some(params)).await;
 
         match result {
             Err(e) => CallToolResult::error(vec![rmcp::model::ContentBlock::text(e)]),
@@ -176,7 +176,7 @@ impl FigmaMcpServer {
             return CallToolResult::error(vec![rmcp::model::ContentBlock::text("outputPath must have a .pdf extension")]);
         }
 
-        let result = self.node.send("export_frames_to_pdf", node_ids, &mut None).await;
+        let result = self.node.send("export_frames_to_pdf", node_ids, None).await;
         match result {
             Err(e) => CallToolResult::error(vec![rmcp::model::ContentBlock::text(e)]),
             Ok(resp) if !resp.error.is_empty() => CallToolResult::error(vec![rmcp::model::ContentBlock::text(resp.error)]),

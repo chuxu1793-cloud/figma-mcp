@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -21,6 +21,7 @@ pub struct Bridge {
     sink: Arc<Mutex<Option<futures_util::stream::SplitSink<WebSocket, Message>>>>,
     pending: Arc<DashMap<String, PendingEntry>>,
     counter: AtomicU64,
+    connected: AtomicBool,
 }
 
 impl Default for Bridge {
@@ -35,6 +36,7 @@ impl Bridge {
             sink: Arc::new(Mutex::new(None)),
             pending: Arc::new(DashMap::new()),
             counter: AtomicU64::new(0),
+            connected: AtomicBool::new(false),
         }
     }
 
@@ -46,6 +48,7 @@ impl Bridge {
             let mut guard = self.sink.lock().await;
             guard.replace(sink)
         };
+        self.connected.store(true, Ordering::SeqCst);
         if let Some(mut old_sink) = old {
             let _ = old_sink.close().await;
             info!("plugin connected (replaced previous connection)");
@@ -80,6 +83,7 @@ impl Bridge {
             let mut guard = self.sink.lock().await;
             guard.take();
         }
+        self.connected.store(false, Ordering::SeqCst);
         self.fail_all_pending("plugin disconnected");
         info!("plugin disconnected");
     }
@@ -149,6 +153,7 @@ impl Bridge {
             let mut guard = self.sink.lock().await;
             guard.take()
         };
+        self.connected.store(false, Ordering::SeqCst);
         if let Some(mut sink) = sink {
             let _ = sink.close().await;
         }
@@ -157,7 +162,7 @@ impl Bridge {
 
     /// Reports whether the plugin is currently connected.
     pub fn is_connected(&self) -> bool {
-        self.sink.try_lock().is_ok_and(|guard| guard.is_some())
+        self.connected.load(Ordering::SeqCst)
     }
 
     fn fail_all_pending(&self, reason: &str) {

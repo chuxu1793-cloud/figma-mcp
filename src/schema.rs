@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 /// simple:   "4029:12345"
 /// compound: "I2167:9091;186:1579;186:1745" (instances/variants)
 static NODE_ID_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^I?\d+:\d+(;\d+:\d+)*$").unwrap());
+    LazyLock::new(|| Regex::new(r"^I?\d+:\d+(;\d+:\d+)*$").expect("invalid node-id regex"));
 
 /// Converts hyphen-format node IDs (LLM output artifact) to colon format.
 /// "4029-12345" → "4029:12345". No-ops for already-valid or unrecognized strings.

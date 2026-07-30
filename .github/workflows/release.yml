@@ -1,0 +1,42 @@
+name: Release
+
+# 打 tag（如 v0.1.0）时触发
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest       # Apple Silicon
+            target: darwin-arm64
+          - os: macos-13           # Intel
+            target: darwin-amd64
+          - os: ubuntu-latest
+            target: linux-amd64
+          - os: windows-latest
+            target: windows-amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: cp target/release/figma-mcp figma-mcp-${{ matrix.target }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        run: copy target\release\figma-mcp.exe figma-mcp-${{ matrix.target }}.exe
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: figma-mcp-*

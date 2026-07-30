@@ -28,7 +28,7 @@ chmod +x figma-mcp
 # Download plugin
 echo "→ Downloading plugin..."
 curl -sL -o figma-plugin.zip "https://github.com/$REPO/releases/download/$VERSION/figma-plugin.zip"
-unzip -qo figma-plugin.zip -d plugin
+unzip -qo figma-plugin.zip
 rm -f figma-plugin.zip
 
 echo ""

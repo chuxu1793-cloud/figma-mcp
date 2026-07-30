@@ -20,8 +20,8 @@ pub const READ_DESIGN_STRATEGY: &str = r##"To effectively read a Figma design wi
    c. Read componentProperties on each instance stub — variant selections, text overrides, boolean toggles
    d. Drill into specific instances with get_node only when an instance has unique overrides you need to inspect
 5. Use search_nodes to find nodes by name or type without dumping the entire tree
-6. Drill into specific nodes with get_node or get_nodes_info (prefer batch over single calls)
-7. For text-heavy components, use scan_text_nodes to collect all copy at once
+6. Drill into specific nodes with get_nodes_info (prefer batch over single calls)
+7. For text-heavy components, use scan_nodes_by_types with ["TEXT"] to collect all copy at once
 8. Use scan_nodes_by_types to find all FRAME/COMPONENT/INSTANCE nodes in a subtree
 9. Call get_styles and get_variable_defs once per session to understand the design system
 10. Call get_fonts to understand typography usage across the page at a glance
@@ -81,7 +81,7 @@ pub const DESIGN_STRATEGY: &str = r##"When working with Figma designs, follow th
      * Smaller for helper text/links
 
 8. Best Practices:
-   - Verify each creation with get_node()
+   - Verify each creation with get_nodes_info()
    - Use parentId to maintain proper hierarchy
    - Group related elements together in frames
    - Keep consistent spacing and alignment
@@ -116,8 +116,8 @@ pub const TEXT_REPLACEMENT_STRATEGY: &str = r##"# Intelligent Text Replacement S
   * Forms (labels, input fields, validation text)
   * Navigation (menu items, breadcrumbs)
 
-scan_text_nodes(nodeId: "node-id")
-get_node(nodeId: "node-id")  // optional for extra context
+scan_nodes_by_types(nodeId: "node-id", types: ["TEXT"])
+get_nodes_info(nodeIds: ["node-id"])  // optional for extra context
 
 ## 2. Strategic Chunking for Complex Designs
 - Divide replacement tasks into logical content chunks based on design structure
@@ -190,7 +190,7 @@ get_selection()
 get_annotations(nodeId: "selected-node-id")
 
 ## Step 2: Scan Annotation Text Nodes
-scan_text_nodes(nodeId: "selected-node-id")
+scan_nodes_by_types(nodeId: "selected-node-id", types: ["TEXT"])
 // Markers typically have these characteristics:
 // - Short text content (usually single digit/letter)
 // - Specific font styles (often bold)
@@ -238,9 +238,9 @@ in Figma, maintaining design consistency while reducing manual work.
 - Determine which is the source instance (with content to copy) and which are targets
 
 ### 2. Inspect Source Instance
-- Use get_node(nodeId: "source-instance-id") to examine the source instance structure
+- Use get_nodes_info(nodeIds: ["source-instance-id"]) to examine the source instance structure
 - Use get_nodes_info(nodeIds: [...]) to batch-inspect multiple instances
-- Use scan_text_nodes(nodeId: "source-instance-id") to capture all text content
+- Use scan_nodes_by_types(nodeId: "source-instance-id", types: ["TEXT"]) to capture all text content
 
 ### 3. Apply Overrides to Targets
 - For text overrides: use set_text(nodeId: "target-text-node-id", text: "copied text")
@@ -249,7 +249,7 @@ in Figma, maintaining design consistency while reducing manual work.
 - Process targets one at a time or identify patterns to apply systematically
 
 ### 4. Verification
-- Verify results with get_node() or get_design_context()
+- Verify results with get_nodes_info() or get_design_context()
 - Confirm text content and style overrides have transferred successfully
 - Use get_screenshot() for visual confirmation if needed
 
@@ -376,8 +376,8 @@ modifying any visual properties.
 
 1. **Understand the scope**
    Ask the user: rename the entire page, a specific frame, or just selected nodes?
-   - Entire page: use get_document() to get the root node ID, then scan_nodes_by_types().
-   - Specific frame: use get_node(nodeId) to inspect it first.
+   - Entire page: use get_design_context() to get the root node ID, then scan_nodes_by_types().
+   - Specific frame: use get_nodes_info(nodeIds) to inspect it first.
    - Selection: use get_selection().
 
 2. **Scan target nodes**
@@ -572,7 +572,7 @@ Ask the user:
 - Arrange output on same page or new frame?
 
 ## Steps
-1. Inspect the source: get_node(sourceNodeId)
+1. Inspect the source: get_nodes_info(nodeIds: [sourceNodeId])
 2. Plan the variant grid layout
 3. Create container frame if requested
 4. For each variant: clone_node, then modify (resize_nodes, set_fills, rename_node)

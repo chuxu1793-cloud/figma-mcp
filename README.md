@@ -12,7 +12,7 @@ Open-source Figma MCP server written in Rust, with full read/write access via pl
 **Highlights**
 - No Figma API token required
 - No rate limits — free plan friendly
-- **Read and Write** live Figma data via plugin bridge — 73 tools total
+- **Read and Write** live Figma data via plugin bridge — 75 tools total
 - Full design automation — styles, variables, components, prototypes, and content
 - Design strategies included — 12 prompts built in
 - Written in Rust — fast, memory-safe, single binary
@@ -66,29 +66,30 @@ codex mcp add figma-mcp -- npx -y @tuanjie/figma-mcp@latest
 
 ---
 
-## Available Tools (73 total)
+## Available Tools (75 total)
 
-### Read Tools (19)
+### Read Tools (16)
 
 | Category | Tools |
 |----------|-------|
-| Document | `get_document`, `get_pages`, `get_metadata`, `get_selection`, `get_viewport` |
-| Nodes | `get_node`, `get_nodes_info`, `get_design_context`, `search_nodes`, `scan_text_nodes`, `scan_nodes_by_types` |
+| Document | `get_pages`, `get_metadata`, `get_selection`, `get_viewport` |
+| Nodes | `get_nodes_info`, `get_design_context`, `search_nodes`, `scan_nodes_by_types` |
 | Styles | `get_styles`, `get_variable_defs`, `get_local_components`, `get_annotations`, `get_fonts` |
 | Prototype | `get_reactions` |
-| Export | `get_screenshot`, `save_screenshots`, `export_frames_to_pdf`, `export_tokens` |
+| Export | `get_screenshot`, `export_frames_to_pdf`, `export_tokens` |
 
-### Write Tools (54)
+### Write Tools (59)
 
 | Category | Tools |
 |----------|-------|
-| Create | `create_frame`, `create_rectangle`, `create_ellipse`, `create_text`, `import_image`, `create_component`, `create_section` |
-| Modify | `set_text`, `set_fills`, `set_strokes`, `move_nodes`, `resize_nodes`, `rename_node`, `clone_node`, `set_opacity`, `set_corner_radius`, `set_auto_layout`, `delete_nodes`, `set_visible`, `lock_nodes`, `unlock_nodes`, `rotate_nodes`, `reorder_nodes`, `set_blend_mode`, `set_constraints`, `reparent_nodes`, `batch_rename_nodes`, `find_replace_text` |
-| Styles | `create_paint_style`, `create_text_style`, `create_effect_style`, `create_grid_style`, `update_paint_style`, `delete_style`, `apply_style_to_node`, `set_effects` |
-| Variables | `create_variable_collection`, `add_variable_mode`, `create_variable`, `set_variable_value`, `delete_variable`, `bind_variable_to_node` |
-| Components | `navigate_to_page`, `group_nodes`, `ungroup_nodes`, `swap_component`, `detach_instance` |
+| Create | `create_frame`, `create_rectangle`, `create_ellipse`, `create_text`, `import_image`, `create_component`, `create_section`, `create_line`, `create_star`, `create_polygon` |
+| Modify | `set_text`, `set_text_properties`, `set_fills`, `set_strokes`, `move_nodes`, `resize_nodes`, `rename_node`, `clone_node`, `set_opacity`, `set_corner_radius`, `set_auto_layout`, `delete_nodes`, `set_visible`, `set_locked`, `rotate_nodes`, `reorder_nodes`, `set_blend_mode`, `set_constraints`, `reparent_nodes`, `batch_rename_nodes`, `find_replace_text` |
+| Styles | `create_paint_style`, `create_text_style`, `create_effect_style`, `create_grid_style`, `update_paint_style`, `update_text_style`, `update_effect_style`, `update_grid_style`, `delete_style`, `apply_style_to_node`, `set_effects`, `bind_variable_to_node` |
+| Variables | `create_variable_collection`, `add_variable_mode`, `create_variable`, `set_variable_value`, `delete_variable` |
+| Components | `group_nodes`, `ungroup_nodes`, `swap_component`, `detach_instance` |
 | Prototype | `set_reactions`, `remove_reactions` |
-| Pages | `add_page`, `delete_page`, `rename_page` |
+| Pages | `navigate_to_page`, `add_page`, `delete_page`, `rename_page` |
+| Export | `export_frames_to_pdf` |
 
 ### MCP Prompts (12)
 

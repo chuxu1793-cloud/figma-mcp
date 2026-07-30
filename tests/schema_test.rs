@@ -47,21 +47,20 @@ fn test_valid_node_id_empty() {
 }
 
 #[test]
-fn test_validate_get_node_empty() {
-    let result = validate_rpc("get_node", &[], &serde_json::Map::new());
+fn test_validate_get_nodes_info_empty() {
+    let result = validate_rpc("get_nodes_info", &[], &serde_json::Map::new());
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), "nodeId is required");
 }
 
 #[test]
-fn test_validate_get_node_valid() {
-    let result = validate_rpc("get_node", &["4029:12345".to_string()], &serde_json::Map::new());
+fn test_validate_get_nodes_info_valid() {
+    let result = validate_rpc("get_nodes_info", &["4029:12345".to_string()], &serde_json::Map::new());
     assert!(result.is_ok());
 }
 
 #[test]
-fn test_validate_get_node_hyphen() {
-    let result = validate_rpc("get_node", &["4029-12345".to_string()], &serde_json::Map::new());
+fn test_validate_get_nodes_info_hyphen() {
+    let result = validate_rpc("get_nodes_info", &["4029-12345".to_string()], &serde_json::Map::new());
     assert!(result.is_err());
 }
 

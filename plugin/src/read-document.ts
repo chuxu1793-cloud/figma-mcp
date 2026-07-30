@@ -2,35 +2,12 @@ import { serializeNode, getBounds, serializeStyles, isMixed, deduplicateStyles }
 
 export const handleReadDocumentRequest = async (request: any) => {
   switch (request.type) {
-    case "get_document": {
-      const raw = await serializeNode(figma.currentPage);
-      const { tree, globalVars } = deduplicateStyles(raw);
-      return {
-        type: request.type,
-        requestId: request.requestId,
-        data: globalVars ? { ...tree, globalVars } : tree,
-      };
-    }
-
     case "get_selection":
       return {
         type: request.type,
         requestId: request.requestId,
         data: await Promise.all(figma.currentPage.selection.map((node) => serializeNode(node))),
       };
-
-    case "get_node": {
-      const nodeId = request.nodeIds && request.nodeIds[0];
-      if (!nodeId) throw new Error("nodeIds is required for get_node");
-      const node = await figma.getNodeByIdAsync(nodeId);
-      if (!node || node.type === "DOCUMENT")
-        throw new Error(`Node not found: ${nodeId}`);
-      return {
-        type: request.type,
-        requestId: request.requestId,
-        data: await serializeNode(node),
-      };
-    }
 
     case "get_nodes_info": {
       if (!request.nodeIds || request.nodeIds.length === 0)
@@ -343,40 +320,6 @@ export const handleReadDocumentRequest = async (request: any) => {
         type: request.type,
         requestId: request.requestId,
         data: { nodeId: node.id, name: node.name, reactions },
-      };
-    }
-
-    case "scan_text_nodes": {
-      const nodeId = request.params && request.params.nodeId;
-      if (!nodeId) throw new Error("nodeId is required for scan_text_nodes");
-      const root = await figma.getNodeByIdAsync(nodeId);
-      if (!root) throw new Error(`Node not found: ${nodeId}`);
-      const textNodes: any[] = [];
-      const findText = async (n: any) => {
-        if (n.type === "TEXT") {
-          textNodes.push({
-            id: n.id,
-            name: n.name,
-            characters: n.characters,
-            fontSize: isMixed(n.fontSize) ? "mixed" : n.fontSize,
-            fontName: isMixed(n.fontName) ? "mixed" : n.fontName,
-          });
-        }
-        if ("children" in n)
-          for (const child of n.children) await findText(child);
-      };
-      figma.ui.postMessage({
-        type: "progress_update",
-        requestId: request.requestId,
-        progress: 10,
-        message: "Scanning text nodes...",
-      });
-      await new Promise((r) => setTimeout(r, 0));
-      await findText(root);
-      return {
-        type: request.type,
-        requestId: request.requestId,
-        data: { count: textNodes.length, textNodes },
       };
     }
 

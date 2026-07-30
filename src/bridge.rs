@@ -162,7 +162,7 @@ impl Bridge {
             }
         }
 
-        let timeout_dur = if msg_type == "get_document" {
+        let timeout_dur = if msg_type == "get_design_context" {
             Duration::from_secs(60)
         } else {
             Duration::from_secs(30)

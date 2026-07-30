@@ -2,7 +2,7 @@ use rmcp::model::Tool;
 
 use crate::tool_helpers::*;
 
-/// Write-create tools: create_frame, create_rectangle, create_ellipse, create_text, import_image, create_component, create_section (7 tools)
+/// Write-create tools: create_frame, create_rectangle, create_ellipse, create_text, import_image, create_component, create_section, create_line, create_star, create_polygon (10 tools)
 pub fn write_create_tools() -> Vec<Tool> {
     vec![
         tool("create_frame", "Create a new frame on the current page or inside a parent node.",
@@ -89,6 +89,42 @@ pub fn write_create_tools() -> Vec<Tool> {
                 ("y", n("Y position (default 0)"), false),
                 ("width", n("Width in pixels"), false),
                 ("height", n("Height in pixels"), false),
+            ])),
+
+        tool("create_line", "Create a line vector on the current page or inside a parent node. The line is drawn from (x, y) to (x + width, y) by default; use rotation to orient it vertically or at an angle.",
+            schema_mixed(&[
+                ("x", n("X position (default 0)"), false),
+                ("y", n("Y position (default 0)"), false),
+                ("width", n("Length of the line in pixels (default 100)"), false),
+                ("name", s("Line name"), false),
+                ("strokeColor", s("Stroke color as hex e.g. #000000"), false),
+                ("strokeWeight", n("Stroke weight in pixels (default 1)"), false),
+                ("parentId", s("Parent node ID in colon format. Defaults to current page."), false),
+            ])),
+
+        tool("create_star", "Create a star shape on the current page or inside a parent node.",
+            schema_mixed(&[
+                ("x", n("X position (default 0)"), false),
+                ("y", n("Y position (default 0)"), false),
+                ("width", n("Width in pixels (default 100)"), false),
+                ("height", n("Height in pixels (default 100)"), false),
+                ("name", s("Star name"), false),
+                ("fillColor", s("Fill color as hex e.g. #FFD700"), false),
+                ("pointCount", n("Number of star points (default 5)"), false),
+                ("innerRadius", n("Inner radius ratio 0–1 (default 0.5)"), false),
+                ("parentId", s("Parent node ID in colon format. Defaults to current page."), false),
+            ])),
+
+        tool("create_polygon", "Create a regular polygon shape on the current page or inside a parent node.",
+            schema_mixed(&[
+                ("x", n("X position (default 0)"), false),
+                ("y", n("Y position (default 0)"), false),
+                ("width", n("Width in pixels (default 100)"), false),
+                ("height", n("Height in pixels (default 100)"), false),
+                ("name", s("Polygon name"), false),
+                ("fillColor", s("Fill color as hex e.g. #3B82F6"), false),
+                ("sides", n("Number of sides (default 6)"), false),
+                ("parentId", s("Parent node ID in colon format. Defaults to current page."), false),
             ])),
     ]
 }

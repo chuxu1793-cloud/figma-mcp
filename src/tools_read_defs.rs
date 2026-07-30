@@ -2,24 +2,19 @@ use rmcp::model::Tool;
 
 use crate::tool_helpers::*;
 
-/// Returns all 19 read tool definitions.
+/// Returns all 16 read tool definitions.
 pub fn read_tools() -> Vec<Tool> {
     vec![
-        tool("get_document", "Get the full node tree of the current page (not the whole file — only the active page). Returns all nodes recursively and can be very large. Prefer get_design_context for exploration or when token efficiency matters.", no_params_schema()),
-
-        tool("get_pages", "List all pages in the document with their IDs and names. Lightweight alternative to get_document.", no_params_schema()),
+        tool("get_pages", "List all pages in the document with their IDs and names. Lightweight alternative to get_design_context for page listing.", no_params_schema()),
 
         tool("get_metadata", "Get metadata about the current Figma document: file name, pages, current page", no_params_schema()),
 
-        tool("get_selection", "Get the nodes currently selected in Figma. Returns an empty array if nothing is selected. Use get_design_context or get_node to retrieve deeper detail about a specific node by ID.", no_params_schema()),
+        tool("get_selection", "Get the nodes currently selected in Figma. Returns an empty array if nothing is selected. Use get_design_context or get_nodes_info to retrieve deeper detail about a specific node by ID.", no_params_schema()),
 
-        tool("get_node", "Get a single node by ID with full detail. Use get_nodes_info to fetch multiple nodes in one round-trip instead of calling this repeatedly. Node ID must be colon format e.g. '4029:12345', never hyphens.",
-            schema(&[("nodeId", "string", true, "Node ID in colon format e.g. '4029:12345'")])),
-
-        tool("get_nodes_info", "Get full details for multiple nodes by ID in one round-trip. Prefer this over calling get_node repeatedly when you need several nodes.",
+        tool("get_nodes_info", "Get full details for multiple nodes by ID in one round-trip. Pass a single-element array to retrieve one node.",
             schema_mixed(&[("nodeIds", arr_s("List of node IDs in colon format e.g. ['4029:12345', '4029:67890']"), true)])),
 
-        tool("get_design_context", "Get a depth-limited, token-efficient tree of the current selection or page. Use this instead of get_document when exploring large files. Supports detail levels (minimal/compact/full) and dedupe_components for pages heavy with repeated component instances.",
+        tool("get_design_context", "Get a depth-limited, token-efficient tree of the current selection or page. Use this for exploring large files. Supports detail levels (minimal/compact/full) and dedupe_components for pages heavy with repeated component instances. Use a high depth value to get the full tree.",
             schema_mixed(&[
                 ("depth", n("How many levels deep to traverse (default 2)"), false),
                 ("detail", s("Property verbosity: minimal (id/name/type/bounds only), compact (+fills/strokes/opacity), full (everything, default)"), false),
@@ -34,13 +29,10 @@ pub fn read_tools() -> Vec<Tool> {
                 ("limit", n("Maximum results to return (default: 50)"), false),
             ])),
 
-        tool("scan_text_nodes", "Scan all TEXT nodes in a subtree and return their content. Shorthand for scan_nodes_by_types with ['TEXT'] — use when you only need text copy from a component or frame.",
-            schema(&[("nodeId", "string", true, "Root node ID to scan from, colon format e.g. '4029:12345'")])),
-
-        tool("scan_nodes_by_types", "Find all nodes of specific types in a subtree, regardless of name. Use search_nodes instead when you need to filter by name.",
+        tool("scan_nodes_by_types", "Find all nodes of specific types in a subtree, regardless of name. Use search_nodes instead when you need to filter by name. Pass ['TEXT'] to scan for text nodes.",
             schema_mixed(&[
                 ("nodeId", s("Root node ID to scan from, colon format e.g. '4029:12345'"), true),
-                ("types", arr_s("Node types to find e.g. ['FRAME', 'COMPONENT', 'INSTANCE']"), true),
+                ("types", arr_s("Node types to find e.g. ['FRAME', 'COMPONENT', 'INSTANCE', 'TEXT']"), true),
             ])),
 
         tool("get_reactions", "Get the prototype reactions defined on a node. Returns an array of reaction objects — each has a trigger (e.g. ON_CLICK, ON_HOVER, AFTER_TIMEOUT) and an actions array (navigate to node, open URL, go back, etc.). Use set_reactions to add or replace reactions, remove_reactions to delete them.",
@@ -62,11 +54,12 @@ pub fn read_tools() -> Vec<Tool> {
         tool("export_tokens", "Export all design tokens (variables and paint styles) as JSON or CSS custom properties. Ideal for bridging Figma variables into your codebase.",
             schema_mixed(&[("format", s("Output format: json (default) or css"), false)])),
 
-        tool("get_screenshot", "Export a screenshot of one or more nodes as base64-encoded image data (held in memory). Use save_screenshots instead when you want to write images directly to disk without base64 in the response.",
+        tool("get_screenshot", "Export a screenshot of one or more nodes. If outputPath is provided, writes the image to disk and returns file metadata; otherwise returns base64-encoded image data in the response.",
             schema_mixed(&[
                 ("nodeIds", arr_s("Optional node IDs to export, colon format. If empty, exports current selection."), false),
                 ("format", s("Export format: PNG (default), SVG, JPG, or PDF"), false),
                 ("scale", n("Export scale for raster formats (default 2)"), false),
+                ("outputPath", s("Optional file path to write the image to. When provided, the image is saved to disk instead of returned as base64."), false),
             ])),
     ]
 }

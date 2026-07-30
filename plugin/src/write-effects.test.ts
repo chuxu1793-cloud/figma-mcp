@@ -44,7 +44,7 @@ describe("set_effects", () => {
     expect(mockNodes["1:1"].effects[0].type).toBe("DROP_SHADOW");
     expect(mockNodes["1:1"].effects[0].radius).toBe(8);
     expect(mockNodes["1:1"].effects[0].color.a).toBe(0.3);
-    expect(res?.data.effectCount).toBe(1);
+    expect(res?.data.results[0].effectCount).toBe(1);
     expect(commitUndoCalled).toBe(true);
   });
 
@@ -88,7 +88,7 @@ describe("set_effects", () => {
     mockNodes["1:1"] = { id: "1:1", effects: [{ type: "DROP_SHADOW" }] };
     const res = await handleWriteStyleRequest(makeRequest("set_effects", ["1:1"], { effects: [] }));
     expect(mockNodes["1:1"].effects).toHaveLength(0);
-    expect(res?.data.effectCount).toBe(0);
+    expect(res?.data.results[0].effectCount).toBe(0);
   });
 
   it("uses default values for shadow", async () => {
@@ -110,10 +110,10 @@ describe("set_effects", () => {
     }))).rejects.toThrow("Unknown effect type");
   });
 
-  it("throws if nodeId is missing", async () => {
+  it("throws if nodeIds is missing", async () => {
     await expect(handleWriteStyleRequest(makeRequest("set_effects", [], {
       effects: [{ type: "DROP_SHADOW" }],
-    }))).rejects.toThrow("nodeId is required");
+    }))).rejects.toThrow("nodeIds is required");
   });
 
   it("throws if effects is not an array", async () => {
@@ -123,17 +123,19 @@ describe("set_effects", () => {
     }))).rejects.toThrow("effects array is required");
   });
 
-  it("throws if node not found", async () => {
-    await expect(handleWriteStyleRequest(makeRequest("set_effects", ["9:9"], {
+  it("returns error if node not found", async () => {
+    const res = await handleWriteStyleRequest(makeRequest("set_effects", ["9:9"], {
       effects: [{ type: "DROP_SHADOW" }],
-    }))).rejects.toThrow("Node not found");
+    }));
+    expect(res?.data.results[0].error).toBe("Node not found");
   });
 
-  it("throws if node does not support effects", async () => {
+  it("returns error if node does not support effects", async () => {
     mockNodes["1:1"] = { id: "1:1" }; // no effects property
-    await expect(handleWriteStyleRequest(makeRequest("set_effects", ["1:1"], {
+    const res = await handleWriteStyleRequest(makeRequest("set_effects", ["1:1"], {
       effects: [{ type: "DROP_SHADOW" }],
-    }))).rejects.toThrow("does not support effects");
+    }));
+    expect(res?.data.results[0].error).toBe("Node does not support effects");
   });
 });
 

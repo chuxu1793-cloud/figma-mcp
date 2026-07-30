@@ -2,15 +2,9 @@ use rmcp::model::Tool;
 
 use crate::tool_helpers::*;
 
-/// Component tools: navigate_to_page, group_nodes, ungroup_nodes, swap_component, detach_instance (5 tools)
+/// Component tools: group_nodes, ungroup_nodes, swap_component, detach_instance (4 tools)
 pub fn write_component_tools() -> Vec<Tool> {
     vec![
-        tool("navigate_to_page", "Switch the active Figma page. Provide either pageId or pageName.",
-            schema_mixed(&[
-                ("pageId", s("Page node ID in colon format e.g. '0:1'"), false),
-                ("pageName", s("Exact page name to navigate to"), false),
-            ])),
-
         tool("group_nodes", "Group two or more nodes into a GROUP. All nodes must share the same parent.",
             schema_mixed(&[
                 ("nodeIds", arr_s("Node IDs to group (minimum 2), in colon format e.g. ['4029:12345', '4029:12346']"), true),

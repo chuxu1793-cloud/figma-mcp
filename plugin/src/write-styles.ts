@@ -150,6 +150,132 @@ export const handleWriteStyleRequest = async (request: any) => {
       };
     }
 
+    case "update_text_style": {
+      const p = request.params || {};
+      if (!p.styleId) throw new Error("styleId is required");
+      const style = await figma.getStyleByIdAsync(p.styleId);
+      if (!style) throw new Error(`Style not found: ${p.styleId}`);
+      if (style.type !== "TEXT") throw new Error(`Style ${p.styleId} is not a text style`);
+      const ts = style as TextStyle;
+      if (p.name) ts.name = p.name;
+      if (p.fontFamily || p.fontStyle) {
+        const family = p.fontFamily || ts.fontName.family;
+        const fontStyle = p.fontStyle || ts.fontName.style;
+        await figma.loadFontAsync({ family, style: fontStyle });
+        ts.fontName = { family, style: fontStyle };
+      }
+      if (p.fontSize != null) ts.fontSize = Number(p.fontSize);
+      if (p.description != null) ts.description = p.description;
+      if (p.textDecoration && p.textDecoration !== "NONE") {
+        ts.textDecoration = p.textDecoration;
+      }
+      if (p.lineHeightValue != null) {
+        if (p.lineHeightUnit === "AUTO") {
+          ts.lineHeight = { unit: "AUTO" };
+        } else {
+          ts.lineHeight = { value: Number(p.lineHeightValue), unit: p.lineHeightUnit || "PIXELS" };
+        }
+      }
+      if (p.letterSpacingValue != null) {
+        ts.letterSpacing = { value: Number(p.letterSpacingValue), unit: p.letterSpacingUnit || "PIXELS" };
+      }
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: ts.id, name: ts.name },
+      };
+    }
+
+    case "update_effect_style": {
+      const p = request.params || {};
+      if (!p.styleId) throw new Error("styleId is required");
+      const style = await figma.getStyleByIdAsync(p.styleId);
+      if (!style) throw new Error(`Style not found: ${p.styleId}`);
+      if (style.type !== "EFFECT") throw new Error(`Style ${p.styleId} is not an effect style`);
+      const es = style as EffectStyle;
+      if (p.name) es.name = p.name;
+      if (p.description != null) es.description = p.description;
+      if (p.type || p.color || p.opacity != null || p.radius != null
+          || p.offsetX != null || p.offsetY != null || p.spread != null) {
+        const effectType = p.type || es.effects[0]?.type || "DROP_SHADOW";
+        const currentEffect = es.effects[0] as DropShadowEffect | BlurEffect | undefined;
+        let effect: Effect;
+        if (effectType === "LAYER_BLUR" || effectType === "BACKGROUND_BLUR") {
+          effect = {
+            type: effectType as "LAYER_BLUR" | "BACKGROUND_BLUR",
+            blurType: "NORMAL",
+            radius: Number(p.radius ?? (currentEffect as BlurEffect)?.radius ?? 4),
+            visible: true,
+          };
+        } else {
+          const current = currentEffect as DropShadowEffect | undefined;
+          const { r, g, b } = hexToRgb(p.color || "#000000");
+          const alpha = p.opacity != null ? Number(p.opacity) : current?.color.a ?? 0.25;
+          effect = {
+            type: effectType as "DROP_SHADOW" | "INNER_SHADOW",
+            color: { r, g, b, a: alpha },
+            offset: { x: Number(p.offsetX ?? current?.offset.x ?? 0), y: Number(p.offsetY ?? current?.offset.y ?? 4) },
+            radius: Number(p.radius ?? current?.radius ?? 8),
+            spread: Number(p.spread ?? current?.spread ?? 0),
+            visible: true,
+            blendMode: "NORMAL",
+          };
+        }
+        es.effects = [effect];
+      }
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: es.id, name: es.name },
+      };
+    }
+
+    case "update_grid_style": {
+      const p = request.params || {};
+      if (!p.styleId) throw new Error("styleId is required");
+      const style = await figma.getStyleByIdAsync(p.styleId);
+      if (!style) throw new Error(`Style not found: ${p.styleId}`);
+      if (style.type !== "GRID") throw new Error(`Style ${p.styleId} is not a grid style`);
+      const gs = style as GridStyle;
+      if (p.name) gs.name = p.name;
+      if (p.description != null) gs.description = p.description;
+      if (p.pattern || p.count != null || p.gutterSize != null || p.offset != null
+          || p.alignment || p.sectionSize != null || p.color || p.opacity != null) {
+        const pattern = p.pattern || gs.layoutGrids[0]?.pattern || "GRID";
+        let grid: LayoutGrid;
+        if (pattern === "COLUMNS" || pattern === "ROWS") {
+          const current = gs.layoutGrids[0] as any;
+          grid = {
+            pattern,
+            count: Number(p.count ?? current?.count ?? 12),
+            gutterSize: Number(p.gutterSize ?? current?.gutterSize ?? 16),
+            offset: Number(p.offset ?? current?.offset ?? 0),
+            alignment: p.alignment || current?.alignment || "STRETCH",
+            visible: true,
+          };
+        } else {
+          const current = gs.layoutGrids[0] as any;
+          const { r, g, b } = hexToRgb(p.color || "#FF0000");
+          const opacity = p.opacity != null ? Number(p.opacity) : current?.color?.a ?? 0.1;
+          grid = {
+            pattern: "GRID",
+            sectionSize: Number(p.sectionSize ?? current?.sectionSize ?? 8),
+            visible: true,
+            color: { r, g, b, a: opacity },
+          };
+        }
+        gs.layoutGrids = [grid];
+      }
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: gs.id, name: gs.name },
+      };
+    }
+
     case "delete_style": {
       const p = request.params || {};
       if (!p.styleId) throw new Error("styleId is required");
@@ -211,12 +337,9 @@ export const handleWriteStyleRequest = async (request: any) => {
 
     case "set_effects": {
       const p = request.params || {};
-      const nodeId = request.nodeIds && request.nodeIds[0];
-      if (!nodeId) throw new Error("nodeId is required");
+      const nodeIds = request.nodeIds || [];
+      if (nodeIds.length === 0) throw new Error("nodeIds is required");
       if (!Array.isArray(p.effects)) throw new Error("effects array is required");
-      const node = await figma.getNodeByIdAsync(nodeId) as any;
-      if (!node) throw new Error(`Node not found: ${nodeId}`);
-      if (!("effects" in node)) throw new Error(`Node ${nodeId} does not support effects`);
       const effects: Effect[] = p.effects.map((e: any) => {
         switch (e.type) {
           case "DROP_SHADOW":
@@ -243,13 +366,16 @@ export const handleWriteStyleRequest = async (request: any) => {
             throw new Error(`Unknown effect type: ${e.type}. Must be DROP_SHADOW, INNER_SHADOW, LAYER_BLUR, or BACKGROUND_BLUR`);
         }
       });
-      node.effects = effects;
+      const results: any[] = [];
+      for (const nid of nodeIds) {
+        const node = await figma.getNodeByIdAsync(nid) as any;
+        if (!node) { results.push({ nodeId: nid, error: "Node not found" }); continue; }
+        if (!("effects" in node)) { results.push({ nodeId: nid, error: "Node does not support effects" }); continue; }
+        node.effects = effects;
+        results.push({ nodeId: nid, name: node.name, effectCount: effects.length });
+      }
       figma.commitUndo();
-      return {
-        type: request.type,
-        requestId: request.requestId,
-        data: { id: node.id, name: node.name, effectCount: effects.length },
-      };
+      return { type: request.type, requestId: request.requestId, data: { results } };
     }
 
     case "bind_variable_to_node": {

@@ -29,15 +29,6 @@ pub fn valid_node_id(s: &str) -> bool {
 /// Returns Err(message) on failure, Ok(()) if valid.
 pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>) -> Result<(), String> {
     match tool {
-        "get_node" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
-        }
-
         "get_nodes_info" => {
             if node_ids.is_empty() {
                 return Err("nodeIds is required and must not be empty".into());
@@ -69,25 +60,6 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
             if let Some(format) = params.get("format").and_then(|v| v.as_str()) {
                 if !valid_export_format(format) {
                     return Err(format!("format must be PNG, SVG, JPG, or PDF, got: {}", format));
-                }
-            }
-        }
-
-        "save_screenshots" => {
-            let items = params.get("items").ok_or("items is required")?;
-            let item_list = items.as_array().ok_or("items must be a non-empty array")?;
-            if item_list.is_empty() {
-                return Err("items must be a non-empty array".into());
-            }
-            for (i, item) in item_list.iter().enumerate() {
-                let m = item.as_object().ok_or_else(|| format!("items[{}] must be an object", i))?;
-                let node_id = m.get("nodeId").and_then(|v| v.as_str()).unwrap_or("");
-                if !valid_node_id(node_id) {
-                    return Err(format!("items[{}].nodeId must use colon format e.g. 4029:12345", i));
-                }
-                let output_path = m.get("outputPath").and_then(|v| v.as_str()).unwrap_or("");
-                if output_path.is_empty() {
-                    return Err(format!("items[{}].outputPath is required", i));
                 }
             }
         }
@@ -131,7 +103,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
             }
         }
 
-        "scan_text_nodes" | "scan_nodes_by_types" => {
+        "scan_nodes_by_types" => {
             let node_id = params.get("nodeId").and_then(|v| v.as_str()).unwrap_or("");
             if node_id.is_empty() {
                 return Err("nodeId is required".into());
@@ -139,11 +111,9 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
             if !valid_node_id(node_id) {
                 return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_id));
             }
-            if tool == "scan_nodes_by_types" {
-                let types = params.get("types").and_then(|v| v.as_array());
-                if types.map_or(true, |t| t.is_empty()) {
-                    return Err("types must be a non-empty array".into());
-                }
+            let types = params.get("types").and_then(|v| v.as_array());
+            if types.map_or(true, |t| t.is_empty()) {
+                return Err("types must be a non-empty array".into());
             }
         }
 
@@ -233,7 +203,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
             validate_auto_layout_params(params)?;
         }
 
-        "create_rectangle" | "create_ellipse" => {
+        "create_rectangle" | "create_ellipse" | "create_line" | "create_star" | "create_polygon" => {
             if let Some(w) = params.get("width").and_then(|v| v.as_f64()) {
                 if w <= 0.0 { return Err("width must be positive".into()); }
             }
@@ -271,13 +241,17 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
             }
         }
 
-        "set_fills" | "set_strokes" => {
+        "set_text_properties" => {
             if node_ids.is_empty() || node_ids[0].is_empty() {
                 return Err("nodeId is required".into());
             }
             if !valid_node_id(&node_ids[0]) {
                 return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
             }
+        }
+
+        "set_fills" | "set_strokes" => {
+            validate_node_ids(node_ids)?;
             let color = params.get("color").and_then(|v| v.as_str()).unwrap_or("");
             if color.is_empty() {
                 return Err("color is required (hex string e.g. #FF5733)".into());
@@ -408,11 +382,16 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
             }
         }
 
-        "update_paint_style" => {
+        "update_paint_style" | "update_text_style" | "update_effect_style" | "update_grid_style" => {
             let style_id = params.get("styleId").and_then(|v| v.as_str()).unwrap_or("");
             if style_id.is_empty() { return Err("styleId is required".into()); }
-            if !params.contains_key("name") && !params.contains_key("color") && !params.contains_key("description") {
-                return Err("at least one of name, color, or description is required".into());
+            if !params.contains_key("name") && !params.contains_key("description")
+                && !params.contains_key("color") && !params.contains_key("fontSize")
+                && !params.contains_key("fontFamily") && !params.contains_key("fontStyle")
+                && !params.contains_key("type") && !params.contains_key("pattern")
+                && !params.contains_key("radius") && !params.contains_key("count")
+            {
+                return Err("at least one updateable property is required".into());
             }
         }
 
@@ -559,8 +538,11 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
             }
         }
 
-        "lock_nodes" | "unlock_nodes" => {
+        "set_locked" => {
             validate_node_ids(node_ids)?;
+            if params.get("locked").and_then(|v| v.as_bool()).is_none() {
+                return Err("locked (boolean) is required".into());
+            }
         }
 
         "rotate_nodes" => {
@@ -668,12 +650,7 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
         }
 
         "set_effects" => {
-            if node_ids.is_empty() || node_ids[0].is_empty() {
-                return Err("nodeId is required".into());
-            }
-            if !valid_node_id(&node_ids[0]) {
-                return Err(format!("nodeId must use colon format e.g. 4029:12345, got: {}", node_ids[0]));
-            }
+            validate_node_ids(node_ids)?;
             let effects = params.get("effects").ok_or("effects array is required")?;
             let effect_list = effects.as_array().ok_or("effects must be an array")?;
             for (i, e) in effect_list.iter().enumerate() {

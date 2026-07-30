@@ -50,9 +50,12 @@ impl FigmaMcpServer {
         let name = params.name.as_ref();
         let args = extract_arguments(params);
 
-        // Special handling for save_screenshots
-        if name == "save_screenshots" {
-            return self.handle_save_screenshots(&args).await;
+        // Special handling for get_screenshot with outputPath
+        if name == "get_screenshot" {
+            let output_path = get_str(&args, "outputPath");
+            if !output_path.is_empty() {
+                return self.handle_get_screenshot_to_file(&args).await;
+            }
         }
 
         // Special handling for export_frames_to_pdf
@@ -70,135 +73,72 @@ impl FigmaMcpServer {
         render_response(result.map_err(|e| e))
     }
 
-    async fn handle_save_screenshots(&self, args: &serde_json::Map<String, Value>) -> CallToolResult {
-        let raw_items = args.get("items").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-        let default_format = args.get("format").and_then(|v| v.as_str()).unwrap_or("");
-        let default_scale = args.get("scale").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    async fn handle_get_screenshot_to_file(&self, args: &serde_json::Map<String, Value>) -> CallToolResult {
+        use crate::schema::normalize_node_id;
+
+        let output_path = get_str(args, "outputPath");
+        let format = get_str(args, "format");
+        let scale = get_f64(args, "scale").unwrap_or(0.0);
+        let node_ids: Vec<String> = get_str_array(args, "nodeIds")
+            .into_iter()
+            .map(|s| normalize_node_id(&s))
+            .collect();
 
         let work_dir = match std::env::current_dir() {
             Ok(d) => d.to_string_lossy().to_string(),
-            Err(e) => {
-                return CallToolResult::error(vec![rmcp::model::ContentBlock::text(format!("getwd: {}", e))]);
-            }
+            Err(e) => return CallToolResult::error(vec![rmcp::model::ContentBlock::text(format!("getwd: {}", e))]),
         };
 
-        let mut results = Vec::new();
-        let mut succeeded = 0;
-        let mut failed = 0;
-
-        for (i, raw_item) in raw_items.iter().enumerate() {
-            let item = match raw_item.as_object() {
-                Some(m) => m,
-                None => {
-                    results.push(serde_json::json!({
-                        "index": i,
-                        "error": format!("items[{}] must be an object", i)
-                    }));
-                    failed += 1;
-                    continue;
-                }
-            };
-
-            let node_id = item.get("nodeId").and_then(|v| v.as_str()).unwrap_or("");
-            let output_path = item.get("outputPath").and_then(|v| v.as_str()).unwrap_or("");
-            let format = item.get("format").and_then(|v| v.as_str()).unwrap_or("");
-            let scale = item.get("scale").and_then(|v| v.as_f64()).unwrap_or(0.0);
-
-            let r = self.save_screenshot_item(node_id, output_path, format, scale, i, &work_dir, default_format, default_scale).await;
-            if r.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
-                succeeded += 1;
-            } else {
-                failed += 1;
-            }
-            results.push(r);
-        }
-
-        let out = serde_json::json!({
-            "total": results.len(),
-            "succeeded": succeeded,
-            "failed": failed,
-            "hasErrors": failed > 0,
-            "results": results,
-        });
-
-        CallToolResult::success(vec![rmcp::model::ContentBlock::text(
-            serde_json::to_string(&out).unwrap_or_default(),
-        )])
-    }
-
-    async fn save_screenshot_item(
-        &self,
-        node_id: &str,
-        output_path: &str,
-        format: &str,
-        scale: f64,
-        index: usize,
-        work_dir: &str,
-        default_format: &str,
-        default_scale: f64,
-    ) -> Value {
-        let resolved_path = match resolve_output_path(output_path, work_dir) {
+        let resolved_path = match resolve_output_path(&output_path, &work_dir) {
             Ok(p) => p,
-            Err(e) => return serde_json::json!({"index": index, "nodeId": node_id, "outputPath": output_path, "error": e}),
+            Err(e) => return CallToolResult::error(vec![rmcp::model::ContentBlock::text(e)]),
         };
 
-        let mut fmt = coalesce(format, default_format).to_string();
-        let inferred = infer_format(&resolved_path).to_string();
-        if fmt.is_empty() {
-            fmt = inferred.clone();
-        }
-        if fmt.is_empty() {
-            fmt = "PNG".to_string();
-        }
-        if !inferred.is_empty() && fmt != inferred {
-            return serde_json::json!({
-                "index": index, "nodeId": node_id, "outputPath": resolved_path,
-                "error": format!("format {} conflicts with file extension {}", fmt, inferred)
-            });
-        }
-
-        let mut s = scale;
-        if s <= 0.0 {
-            s = default_scale;
-        }
+        let mut fmt = if format.is_empty() {
+            infer_format(&resolved_path).to_string()
+        } else {
+            format.to_string()
+        };
+        if fmt.is_empty() { fmt = "PNG".to_string(); }
 
         let mut params = serde_json::Map::new();
         params.insert("format".to_string(), Value::String(fmt.clone()));
-        if s > 0.0 {
-            params.insert("scale".to_string(), serde_json::json!(s));
-        }
+        if scale > 0.0 { params.insert("scale".to_string(), serde_json::json!(scale)); }
 
-        let result = self.node.send("get_screenshot", vec![node_id.to_string()], &mut Some(params)).await;
+        let ids = if node_ids.is_empty() { vec![] } else { node_ids.clone() };
+        let result = self.node.send("get_screenshot", ids, &mut Some(params)).await;
+
         match result {
-            Err(e) => serde_json::json!({"index": index, "nodeId": node_id, "outputPath": resolved_path, "error": e}),
-            Ok(resp) if !resp.error.is_empty() => serde_json::json!({"index": index, "nodeId": node_id, "outputPath": resolved_path, "error": resp.error}),
+            Err(e) => CallToolResult::error(vec![rmcp::model::ContentBlock::text(e)]),
+            Ok(resp) if !resp.error.is_empty() => CallToolResult::error(vec![rmcp::model::ContentBlock::text(resp.error)]),
             Ok(resp) => {
-                // Extract screenshot export from response data
                 let wrapper = resp.data.unwrap_or(Value::Null);
-                let exports = wrapper.get("exports").and_then(|v| v.as_array());
-                let export = exports.and_then(|a| a.first()).cloned().unwrap_or(Value::Null);
+                let exports = wrapper.get("exports").and_then(|v| v.as_array()).cloned().unwrap_or_default();
 
+                if exports.is_empty() {
+                    return CallToolResult::error(vec![rmcp::model::ContentBlock::text("no nodes to export")]);
+                }
+
+                let export = &exports[0];
                 let base64_data = export.get("base64").and_then(|v| v.as_str()).unwrap_or("");
-                let export_node_id = export.get("nodeId").and_then(|v| v.as_str()).unwrap_or(node_id);
-                let export_node_name = export.get("nodeName").and_then(|v| v.as_str()).unwrap_or("");
-                let export_width = export.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                let export_height = export.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
                 match write_base64(base64_data, &resolved_path) {
-                    Ok(bytes) => serde_json::json!({
-                        "index": index,
-                        "nodeId": export_node_id,
-                        "nodeName": export_node_name,
-                        "outputPath": resolved_path,
-                        "format": fmt,
-                        "width": export_width,
-                        "height": export_height,
-                        "bytesWritten": bytes,
-                        "success": true
-                    }),
-                    Err(e) => serde_json::json!({
-                        "index": index, "nodeId": node_id, "outputPath": resolved_path, "error": e
-                    }),
+                    Ok(bytes) => {
+                        let out = serde_json::json!({
+                            "nodeId": export.get("nodeId").and_then(|v| v.as_str()).unwrap_or(""),
+                            "nodeName": export.get("nodeName").and_then(|v| v.as_str()).unwrap_or(""),
+                            "outputPath": resolved_path,
+                            "format": fmt,
+                            "width": export.get("width").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            "height": export.get("height").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                            "bytesWritten": bytes,
+                            "success": true
+                        });
+                        CallToolResult::success(vec![rmcp::model::ContentBlock::text(
+                            serde_json::to_string(&out).unwrap_or_default(),
+                        )])
+                    }
+                    Err(e) => CallToolResult::error(vec![rmcp::model::ContentBlock::text(e)]),
                 }
             }
         }
@@ -346,13 +286,13 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
 
     match tool {
         // Simple tools: no params, no node_ids
-        "get_document" | "get_pages" | "get_metadata" | "get_selection" | "get_viewport"
+        "get_pages" | "get_metadata" | "get_selection" | "get_viewport"
         | "get_fonts" | "get_styles" | "get_variable_defs" | "get_local_components" => {
             (vec![], serde_json::Map::new())
         }
 
         // Tools with nodeId parameter
-        "get_node" | "get_reactions" => {
+        "get_reactions" => {
             let node_id = normalize_node_id(&get_str(args, "nodeId"));
             (vec![node_id], serde_json::Map::new())
         }
@@ -389,13 +329,6 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
             if let Some(limit) = get_f64(args, "limit") {
                 if limit > 0.0 { params.insert("limit".into(), serde_json::json!(limit)); }
             }
-            (vec![], params)
-        }
-
-        // scan_text_nodes
-        "scan_text_nodes" => {
-            let mut params = serde_json::Map::new();
-            params.insert("nodeId".into(), Value::String(get_str(args, "nodeId")));
             (vec![], params)
         }
 
@@ -440,8 +373,10 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
         // create_frame, create_rectangle, create_ellipse, create_text
         // — pass all arguments as params
         "create_frame" | "create_rectangle" | "create_ellipse" | "create_text"
+        | "create_line" | "create_star" | "create_polygon"
         | "create_paint_style" | "create_text_style" | "create_effect_style" | "create_grid_style"
-        | "update_paint_style" | "delete_style"
+        | "update_paint_style" | "update_text_style" | "update_effect_style" | "update_grid_style"
+        | "delete_style"
         | "create_variable_collection" | "add_variable_mode" | "create_variable"
         | "set_variable_value" | "delete_variable" => {
             (vec![], args.clone())
@@ -488,22 +423,27 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
             (vec![node_id], params)
         }
 
+        // set_text_properties
+        "set_text_properties" => {
+            let node_id = normalize_node_id(&get_str(args, "nodeId"));
+            (vec![node_id], args.clone())
+        }
+
         // set_fills, set_strokes
         "set_fills" | "set_strokes" => {
-            let node_id = normalize_node_id(&get_str(args, "nodeId"));
+            let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
             params.insert("color".into(), args.get("color").cloned().unwrap_or(Value::Null));
             copy_opt_f64(args, &mut params, "opacity");
             copy_opt_f64(args, &mut params, "strokeWeight");
             copy_opt_str(args, &mut params, "mode");
-            (vec![node_id], params)
+            (ids, params)
         }
 
-        // move_nodes, resize_nodes, delete_nodes, set_visible, lock_nodes, unlock_nodes
+        // move_nodes, resize_nodes, delete_nodes, set_visible, set_locked
         // rotate_nodes, reorder_nodes, set_blend_mode, set_constraints, batch_rename_nodes
         // ungroup_nodes, group_nodes, detach_instance
-        "move_nodes" | "resize_nodes" | "delete_nodes" | "set_visible" | "lock_nodes"
-        | "unlock_nodes" | "rotate_nodes" | "reorder_nodes" | "set_blend_mode"
+        "move_nodes" | "resize_nodes" | "delete_nodes" | "set_visible" | "set_locked" | "rotate_nodes" | "reorder_nodes" | "set_blend_mode"
         | "set_constraints" | "batch_rename_nodes" | "ungroup_nodes" | "detach_instance" => {
             let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
@@ -511,6 +451,7 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
                 "move_nodes" => { copy_opt_f64(args, &mut params, "x"); copy_opt_f64(args, &mut params, "y"); }
                 "resize_nodes" => { copy_opt_f64(args, &mut params, "width"); copy_opt_f64(args, &mut params, "height"); }
                 "set_visible" => { if let Some(v) = get_bool(args, "visible") { params.insert("visible".into(), Value::Bool(v)); } }
+                "set_locked" => { if let Some(v) = get_bool(args, "locked") { params.insert("locked".into(), Value::Bool(v)); } }
                 "rotate_nodes" => { if let Some(v) = get_f64(args, "rotation") { params.insert("rotation".into(), serde_json::json!(v)); } }
                 "reorder_nodes" => { copy_opt_str(args, &mut params, "order"); }
                 "set_blend_mode" => { copy_opt_str(args, &mut params, "blendMode"); }
@@ -628,10 +569,10 @@ fn build_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> (Vec<S
 
         // set_effects
         "set_effects" => {
-            let node_id = normalize_node_id(&get_str(args, "nodeId"));
+            let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
             let mut params = serde_json::Map::new();
             params.insert("effects".into(), args.get("effects").cloned().unwrap_or(Value::Null));
-            (vec![node_id], params)
+            (ids, params)
         }
 
         // bind_variable_to_node

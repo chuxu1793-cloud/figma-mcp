@@ -66,7 +66,7 @@ pub fn get_str_array(args: &serde_json::Map<String, Value>, key: &str) -> Vec<St
         .unwrap_or_default()
 }
 
-// ── save_screenshots helpers ──
+// ── screenshot/export helpers ──
 
 pub fn resolve_output_path(output_path: &str, work_dir: &str) -> Result<String, String> {
     let resolved = if std::path::Path::new(output_path).is_absolute() {

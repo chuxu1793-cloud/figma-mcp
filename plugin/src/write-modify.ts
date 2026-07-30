@@ -25,45 +25,90 @@ export const handleWriteModifyRequest = async (request: any) => {
       };
     }
 
-    case "set_fills": {
+    case "set_text_properties": {
       const p = request.params || {};
       const nodeId = request.nodeIds && request.nodeIds[0];
       if (!nodeId) throw new Error("nodeId is required");
-      const node = await figma.getNodeByIdAsync(nodeId);
+      const node = await figma.getNodeByIdAsync(nodeId) as any;
       if (!node) throw new Error(`Node not found: ${nodeId}`);
-      if (!("fills" in node)) throw new Error(`Node ${nodeId} does not support fills`);
-      const newFill = makeSolidPaint(p.color, p.opacity != null ? p.opacity : undefined);
-      const currentFills = (node as any).fills;
-      (node as any).fills = p.mode === "append"
-        ? [...(isMixed(currentFills) ? [] : currentFills as Paint[]), newFill]
-        : [newFill];
+      if (node.type !== "TEXT") throw new Error(`Node ${nodeId} is not a TEXT node`);
+
+      // Determine target font (load if changing family/style)
+      const currentFont = typeof node.fontName === "symbol"
+        ? { family: "Inter", style: "Regular" }
+        : node.fontName;
+      const family = p.fontFamily || currentFont.family;
+      const style = p.fontStyle || currentFont.style;
+      if (p.fontFamily || p.fontStyle) {
+        await figma.loadFontAsync({ family, style });
+        node.fontName = { family, style };
+      } else {
+        await figma.loadFontAsync(currentFont);
+      }
+
+      if (p.fontSize != null) node.fontSize = Number(p.fontSize);
+      if (p.textDecoration != null) node.textDecoration = p.textDecoration;
+      if (p.textCase != null) node.textCase = p.textCase;
+      if (p.textAlignHorizontal != null) node.textAlignHorizontal = p.textAlignHorizontal;
+      if (p.textAlignVertical != null) node.textAlignVertical = p.textAlignVertical;
+      if (p.lineHeightValue != null) {
+        if (p.lineHeightUnit === "AUTO") {
+          node.lineHeight = { unit: "AUTO" };
+        } else {
+          node.lineHeight = { value: Number(p.lineHeightValue), unit: p.lineHeightUnit || "PIXELS" };
+        }
+      }
+      if (p.letterSpacingValue != null) {
+        node.letterSpacing = { value: Number(p.letterSpacingValue), unit: p.letterSpacingUnit || "PIXELS" };
+      }
+
       figma.commitUndo();
       return {
         type: request.type,
         requestId: request.requestId,
-        data: { id: node.id, name: node.name },
+        data: { id: node.id, name: node.name, fontSize: node.fontSize, fontName: node.fontName },
       };
+    }
+
+    case "set_fills": {
+      const p = request.params || {};
+      const nodeIds = request.nodeIds || [];
+      if (nodeIds.length === 0) throw new Error("nodeIds is required");
+      const newFill = makeSolidPaint(p.color, p.opacity != null ? p.opacity : undefined);
+      const results: any[] = [];
+      for (const nid of nodeIds) {
+        const node = await figma.getNodeByIdAsync(nid) as any;
+        if (!node) { results.push({ nodeId: nid, error: "Node not found" }); continue; }
+        if (!("fills" in node)) { results.push({ nodeId: nid, error: "Node does not support fills" }); continue; }
+        const currentFills = (node as any).fills;
+        (node as any).fills = p.mode === "append"
+          ? [...(isMixed(currentFills) ? [] : currentFills as Paint[]), newFill]
+          : [newFill];
+        results.push({ nodeId: nid, name: node.name });
+      }
+      figma.commitUndo();
+      return { type: request.type, requestId: request.requestId, data: { results } };
     }
 
     case "set_strokes": {
       const p = request.params || {};
-      const nodeId = request.nodeIds && request.nodeIds[0];
-      if (!nodeId) throw new Error("nodeId is required");
-      const node = await figma.getNodeByIdAsync(nodeId);
-      if (!node) throw new Error(`Node not found: ${nodeId}`);
-      if (!("strokes" in node)) throw new Error(`Node ${nodeId} does not support strokes`);
+      const nodeIds = request.nodeIds || [];
+      if (nodeIds.length === 0) throw new Error("nodeIds is required");
       const newStroke = makeSolidPaint(p.color);
-      const currentStrokes = (node as any).strokes;
-      (node as any).strokes = p.mode === "append"
-        ? [...(isMixed(currentStrokes) ? [] : currentStrokes as Paint[]), newStroke]
-        : [newStroke];
-      if (p.strokeWeight != null) (node as any).strokeWeight = p.strokeWeight;
+      const results: any[] = [];
+      for (const nid of nodeIds) {
+        const node = await figma.getNodeByIdAsync(nid) as any;
+        if (!node) { results.push({ nodeId: nid, error: "Node not found" }); continue; }
+        if (!("strokes" in node)) { results.push({ nodeId: nid, error: "Node does not support strokes" }); continue; }
+        const currentStrokes = (node as any).strokes;
+        (node as any).strokes = p.mode === "append"
+          ? [...(isMixed(currentStrokes) ? [] : currentStrokes as Paint[]), newStroke]
+          : [newStroke];
+        if (p.strokeWeight != null) (node as any).strokeWeight = p.strokeWeight;
+        results.push({ nodeId: nid, name: node.name });
+      }
       figma.commitUndo();
-      return {
-        type: request.type,
-        requestId: request.requestId,
-        data: { id: node.id, name: node.name },
-      };
+      return { type: request.type, requestId: request.requestId, data: { results } };
     }
 
     case "move_nodes": {
@@ -205,11 +250,11 @@ export const handleWriteModifyRequest = async (request: any) => {
       return { type: request.type, requestId: request.requestId, data: { results } };
     }
 
-    case "lock_nodes":
-    case "unlock_nodes": {
+    case "set_locked": {
+      const p = request.params || {};
       const nodeIds = request.nodeIds || [];
       if (nodeIds.length === 0) throw new Error("nodeIds is required");
-      const locked = request.type === "lock_nodes";
+      const locked = p.locked === true;
       const results: any[] = [];
       for (const nid of nodeIds) {
         const n = await figma.getNodeByIdAsync(nid) as any;

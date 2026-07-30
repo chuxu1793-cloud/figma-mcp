@@ -158,41 +158,39 @@ describe("set_visible", () => {
   });
 });
 
-// ── lock_nodes / unlock_nodes ─────────────────────────────────────────────────
+// ── set_locked ────────────────────────────────────────────────────────────────
 
-describe("lock_nodes", () => {
+describe("set_locked", () => {
   it("locks a node", async () => {
     mockNodes["1:1"] = { id: "1:1", locked: false };
-    const res = await handleWriteModifyRequest(makeRequest("lock_nodes", ["1:1"]));
+    const res = await handleWriteModifyRequest(makeRequest("set_locked", ["1:1"], { locked: true }));
     expect(mockNodes["1:1"].locked).toBe(true);
     expect(res?.data.results[0].locked).toBe(true);
     expect(commitUndoCalled).toBe(true);
   });
 
+  it("unlocks a node", async () => {
+    mockNodes["1:1"] = { id: "1:1", locked: true };
+    const res = await handleWriteModifyRequest(makeRequest("set_locked", ["1:1"], { locked: false }));
+    expect(mockNodes["1:1"].locked).toBe(false);
+    expect(res?.data.results[0].locked).toBe(false);
+  });
+
   it("reports error for missing node", async () => {
-    const res = await handleWriteModifyRequest(makeRequest("lock_nodes", ["9:9"]));
+    const res = await handleWriteModifyRequest(makeRequest("set_locked", ["9:9"], { locked: true }));
     expect(res?.data.results[0].error).toBe("Node not found");
   });
 
   it("reports error for node without locked support", async () => {
     mockNodes["1:1"] = { id: "1:1" }; // no locked property
-    const res = await handleWriteModifyRequest(makeRequest("lock_nodes", ["1:1"]));
+    const res = await handleWriteModifyRequest(makeRequest("set_locked", ["1:1"], { locked: true }));
     expect(res?.data.results[0].error).toContain("does not support locking");
-  });
-});
-
-describe("unlock_nodes", () => {
-  it("unlocks a node", async () => {
-    mockNodes["1:1"] = { id: "1:1", locked: true };
-    const res = await handleWriteModifyRequest(makeRequest("unlock_nodes", ["1:1"]));
-    expect(mockNodes["1:1"].locked).toBe(false);
-    expect(res?.data.results[0].locked).toBe(false);
   });
 
   it("handles multiple nodes", async () => {
     mockNodes["1:1"] = { id: "1:1", locked: true };
     mockNodes["2:2"] = { id: "2:2", locked: true };
-    const res = await handleWriteModifyRequest(makeRequest("unlock_nodes", ["1:1", "2:2"]));
+    const res = await handleWriteModifyRequest(makeRequest("set_locked", ["1:1", "2:2"], { locked: false }));
     expect(res?.data.results).toHaveLength(2);
     expect(mockNodes["1:1"].locked).toBe(false);
     expect(mockNodes["2:2"].locked).toBe(false);

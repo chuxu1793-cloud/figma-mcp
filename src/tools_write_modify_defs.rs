@@ -4,8 +4,9 @@ use crate::tool_helpers::*;
 
 /// Write-modify tools: set_text, set_fills, set_strokes, move_nodes, resize_nodes,
 /// rename_node, clone_node, set_opacity, set_corner_radius, set_auto_layout,
-/// delete_nodes, set_visible, lock_nodes, unlock_nodes, rotate_nodes, reorder_nodes,
-/// set_blend_mode, set_constraints, reparent_nodes, batch_rename_nodes, find_replace_text (21 tools)
+/// delete_nodes, set_visible, set_locked, rotate_nodes, reorder_nodes,
+/// set_blend_mode, set_constraints, reparent_nodes, batch_rename_nodes,
+/// find_replace_text, set_text_properties (21 tools)
 pub fn write_modify_tools() -> Vec<Tool> {
     vec![
         tool("set_text", "Update the text content of an existing TEXT node.",
@@ -14,19 +15,19 @@ pub fn write_modify_tools() -> Vec<Tool> {
                 ("text", s("New text content"), true),
             ])),
 
-        tool("set_fills", "Set the fill color on a single node (takes one nodeId, not an array). Use mode='append' to stack a new fill on top of existing fills instead of replacing them.",
+        tool("set_fills", "Set the fill color on one or more nodes. Use mode='append' to stack a new fill on top of existing fills instead of replacing them.",
             schema_mixed(&[
-                ("nodeId", s("Node ID in colon format e.g. '4029:12345'"), true),
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
                 ("color", s("Fill color as hex: #RRGGBB e.g. #FF5733 or #RRGGBBAA e.g. #FF573380 for 50% alpha"), true),
                 ("opacity", n("Fill opacity 0–1 (default 1). Combines multiplicatively with any alpha in the color hex."), false),
                 ("mode", s("'replace' (default) overwrites all existing fills; 'append' stacks this fill on top of existing ones"), false),
             ])),
 
-        tool("set_strokes", "Set the stroke color and weight on a single node (takes one nodeId, not an array). Use mode='append' to stack a new stroke on top of existing strokes instead of replacing them.",
+        tool("set_strokes", "Set the stroke color and optionally the stroke weight on one or more nodes. Use mode='append' to stack a new stroke on top of existing strokes instead of replacing them. Omit strokeWeight to change only the color without affecting the weight.",
             schema_mixed(&[
-                ("nodeId", s("Node ID in colon format e.g. '4029:12345'"), true),
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
                 ("color", s("Stroke color as hex e.g. #000000"), true),
-                ("strokeWeight", n("Stroke weight in pixels (default 1)"), false),
+                ("strokeWeight", n("Stroke weight in pixels. Omit to keep existing weight."), false),
                 ("mode", s("'replace' (default) overwrites all strokes; 'append' stacks on top of existing strokes"), false),
             ])),
 
@@ -100,11 +101,11 @@ pub fn write_modify_tools() -> Vec<Tool> {
                 ("visible", b("true to show the node, false to hide it"), true),
             ])),
 
-        tool("lock_nodes", "Lock one or more nodes to prevent accidental edits in Figma.",
-            schema_mixed(&[("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true)])),
-
-        tool("unlock_nodes", "Unlock one or more nodes, allowing them to be edited again.",
-            schema_mixed(&[("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true)])),
+        tool("set_locked", "Lock or unlock one or more nodes. Locked nodes cannot be accidentally edited in Figma.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("locked", b("true to lock, false to unlock"), true),
+            ])),
 
         tool("rotate_nodes", "Rotate one or more nodes to an absolute angle in degrees.",
             schema_mixed(&[
@@ -126,7 +127,7 @@ pub fn write_modify_tools() -> Vec<Tool> {
 
         tool("set_constraints", "Set layout constraints (pinning behaviour) on one or more nodes relative to their parent.",
             schema_mixed(&[
-                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345'"), true),
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
                 ("horizontal", s("Horizontal constraint: MIN (left), MAX (right), CENTER, STRETCH, or SCALE"), false),
                 ("vertical", s("Vertical constraint: MIN (top), MAX (bottom), CENTER, STRETCH, or SCALE"), false),
             ])),
@@ -155,6 +156,22 @@ pub fn write_modify_tools() -> Vec<Tool> {
                 ("nodeId", s("Root node ID to scope the search. Defaults to the entire current page."), false),
                 ("useRegex", b("Treat find as a regular expression (default false)"), false),
                 ("regexFlags", s("Regex flags e.g. 'gi' (default 'g'). Only used when useRegex=true."), false),
+            ])),
+
+        tool("set_text_properties", "Modify typography properties (fontSize, fontFamily, fontStyle, lineHeight, letterSpacing, textDecoration, textCase) on an existing TEXT node. Only provided properties are changed; omitted ones are left unchanged. The font must be installed in Figma.",
+            schema_mixed(&[
+                ("nodeId", s("TEXT node ID in colon format e.g. '4029:12345'"), true),
+                ("fontSize", n("Font size in pixels"), false),
+                ("fontFamily", s("Font family name e.g. 'Inter', 'Roboto'. Must be installed in Figma."), false),
+                ("fontStyle", s("Font style variant e.g. 'Regular', 'Bold', 'Medium', 'SemiBold'"), false),
+                ("lineHeightValue", n("Line height value (unit set by lineHeightUnit)"), false),
+                ("lineHeightUnit", s("Line height unit: PIXELS or PERCENT or AUTO"), false),
+                ("letterSpacingValue", n("Letter spacing value (unit set by letterSpacingUnit)"), false),
+                ("letterSpacingUnit", s("Letter spacing unit: PIXELS or PERCENT"), false),
+                ("textDecoration", s("Text decoration: NONE, UNDERLINE, or STRIKETHROUGH"), false),
+                ("textCase", s("Text case: ORIGINAL, UPPER, LOWER, TITLE, or SMALL_CAPS"), false),
+                ("textAlignHorizontal", s("Horizontal alignment: LEFT, CENTER, RIGHT, or JUSTIFIED"), false),
+                ("textAlignVertical", s("Vertical alignment: TOP, CENTER, or BOTTOM"), false),
             ])),
     ]
 }

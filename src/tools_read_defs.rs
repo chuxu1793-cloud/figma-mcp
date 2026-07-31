@@ -2,7 +2,7 @@ use rmcp::model::Tool;
 
 use crate::tool_helpers::*;
 
-/// Returns all 16 read tool definitions.
+/// Returns all 17 read tool definitions.
 pub fn read_tools() -> Vec<Tool> {
     vec![
         tool("get_pages", "List all pages in the document with their IDs and names. Lightweight alternative to get_design_context for page listing.", no_params_schema()),
@@ -60,6 +60,13 @@ pub fn read_tools() -> Vec<Tool> {
                 ("format", s("Export format: PNG (default), SVG, JPG, or PDF"), false),
                 ("scale", n("Export scale for raster formats (default 2)"), false),
                 ("outputPath", s("Optional file path to write the image to. When provided, the image is saved to disk instead of returned as base64."), false),
+            ])),
+
+        tool("get_plugin_data", "Read custom plugin data stored on a node via setPluginData or setSharedPluginData. Omit nodeId to read from the current page.",
+            schema_mixed(&[
+                ("nodeId", s("Optional node ID to read data from, colon format e.g. '4029:12345'. Defaults to current page."), false),
+                ("key", s("Data key to read"), true),
+                ("scope", s("Data scope: 'plugin' (default) or 'shared'"), false),
             ])),
     ]
 }

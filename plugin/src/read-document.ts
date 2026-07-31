@@ -371,6 +371,29 @@ export const handleReadDocumentRequest = async (request: any) => {
       };
     }
 
+    case "get_plugin_data": {
+      const nodeId = request.nodeIds && request.nodeIds[0];
+      const key = request.params && request.params.key;
+      const scope = request.params && request.params.scope; // "plugin" or "shared"
+      if (!key) throw new Error("key is required");
+      let node: any;
+      if (nodeId) {
+        node = await figma.getNodeByIdAsync(nodeId);
+        if (!node) throw new Error(`Node not found: ${nodeId}`);
+      } else {
+        node = figma.currentPage;
+      }
+      const value = scope === "shared"
+        ? node.getSharedPluginDataAsync("figma-mcp", key)
+        : node.getPluginDataAsync(key);
+      const result = await value;
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { nodeId: node.id, key, scope: scope || "plugin", value: result || "" },
+      };
+    }
+
     default:
       return null;
   }

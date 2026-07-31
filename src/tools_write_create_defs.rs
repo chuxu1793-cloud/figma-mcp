@@ -1,8 +1,9 @@
 use rmcp::model::Tool;
+use serde_json::json;
 
 use crate::tool_helpers::*;
 
-/// Write-create tools: create_frame, create_rectangle, create_ellipse, create_text, import_image, create_component, create_section, create_line, create_star, create_polygon (10 tools)
+/// Write-create tools: create_frame, create_rectangle, create_ellipse, create_text, import_image, create_component, create_section, create_line, create_star, create_polygon, batch_create_nodes (11 tools)
 pub fn write_create_tools() -> Vec<Tool> {
     vec![
         tool("create_frame", "Create a new frame on the current page or inside a parent node.",
@@ -125,6 +126,28 @@ pub fn write_create_tools() -> Vec<Tool> {
                 ("fillColor", s("Fill color as hex e.g. #3B82F6"), false),
                 ("sides", n("Number of sides (default 6)"), false),
                 ("parentId", s("Parent node ID in colon format. Defaults to current page."), false),
+            ])),
+
+        tool("batch_create_nodes", "Create multiple nodes in a single call. Each node spec must include a 'type' field (frame, rectangle, ellipse, text). Supports the same properties as the individual create_* tools.",
+            schema_mixed(&[
+                ("nodes", arr_o("Array of node specifications. Each must have a 'type' field.", json!({
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string", "description": "Node type: frame, rectangle, ellipse, or text"},
+                        "x": {"type": "number", "description": "X position (default 0)"},
+                        "y": {"type": "number", "description": "Y position (default 0)"},
+                        "width": {"type": "number", "description": "Width in pixels (default 100)"},
+                        "height": {"type": "number", "description": "Height in pixels (default 100)"},
+                        "name": {"type": "string", "description": "Node name"},
+                        "fillColor": {"type": "string", "description": "Fill color as hex e.g. #FF5733"},
+                        "text": {"type": "string", "description": "Text content (text type only)"},
+                        "fontSize": {"type": "number", "description": "Font size (text type only)"},
+                        "fontFamily": {"type": "string", "description": "Font family (text type only, default Inter)"},
+                        "fontStyle": {"type": "string", "description": "Font style (text type only, default Regular)"}
+                    },
+                    "required": ["type"]
+                })), true),
+                ("parentId", s("Parent node ID for all created nodes. Defaults to current page."), false),
             ])),
     ]
 }

@@ -1,6 +1,6 @@
 use rmcp::model::{GetPromptResult, Prompt, PromptMessage, Role};
 
-/// Returns all 12 MCP prompt definitions.
+/// Returns all 14 MCP prompt definitions.
 pub fn all_prompts() -> Vec<Prompt> {
     vec![
         Prompt::new("read_design_strategy", Some("Best practices for reading Figma designs with figma-mcp"), None),
@@ -15,6 +15,8 @@ pub fn all_prompts() -> Vec<Prompt> {
         Prompt::new("generate_color_palette", Some("Generate a complete semantic color palette (primitive scale + semantic aliases) from one or more brand colors"), None),
         Prompt::new("generate_type_scale", Some("Generate a complete typography scale (text styles) from a base font and size"), None),
         Prompt::new("generate_component_variants", Some("Generate design variants of an existing component or frame (size, color, state, theme)"), None),
+        Prompt::new("analyze_design_system", Some("Analyze the current document's design system maturity: styles, variables, components, and consistency"), None),
+        Prompt::new("component_audit", Some("Audit component usage across the document — find instances with overrides, unlinked components, and missing variants"), None),
     ]
 }
 
@@ -33,6 +35,8 @@ pub fn get_prompt_result(name: &str) -> Option<GetPromptResult> {
         "generate_color_palette" => crate::prompt_texts::GENERATE_COLOR_PALETTE,
         "generate_type_scale" => crate::prompt_texts::GENERATE_TYPE_SCALE,
         "generate_component_variants" => crate::prompt_texts::GENERATE_COMPONENT_VARIANTS,
+        "analyze_design_system" => crate::prompt_texts::ANALYZE_DESIGN_SYSTEM,
+        "component_audit" => crate::prompt_texts::COMPONENT_AUDIT,
         _ => return None,
     };
     Some(GetPromptResult::new(vec![

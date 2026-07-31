@@ -248,10 +248,29 @@ impl ServerHandler for FigmaMcpServer {
 
     async fn list_tools(
         &self,
-        _request: Option<PaginatedRequestParams>,
+        request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
-        Ok(ListToolsResult::with_all_items(self.tools.clone()))
+        let page_size = 50; // tools per page
+        let cursor = request
+            .and_then(|r| r.cursor)
+            .and_then(|c| c.parse::<usize>().ok())
+            .unwrap_or(0);
+
+        let total = self.tools.len();
+        let start = cursor.min(total);
+        let end = (start + page_size).min(total);
+        let next_cursor = if end < total {
+            Some(end.to_string())
+        } else {
+            None
+        };
+
+        let items = self.tools[start..end].to_vec();
+        Ok(ListToolsResult {
+            next_cursor,
+            ..ListToolsResult::with_all_items(items)
+        })
     }
 
     async fn call_tool(
@@ -373,6 +392,26 @@ fn build_read_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) -> O
             Some((vec![], params))
         }
 
+        "get_plugin_data" => {
+            let mut params = serde_json::Map::new();
+            let id = get_str(args, "nodeId");
+            let node_ids = if id.is_empty() { vec![] } else { vec![normalize_node_id(&id)] };
+            params.insert("key".into(), Value::String(get_str(args, "key")));
+            copy_opt_str(args, &mut params, "scope");
+            Some((node_ids, params))
+        }
+
+        "export_nodes" => {
+            let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
+            let mut params = serde_json::Map::new();
+            let f = get_str(args, "format");
+            if !f.is_empty() { params.insert("format".into(), Value::String(f)); }
+            if let Some(s) = get_f64(args, "scale") {
+                if s > 0.0 { params.insert("scale".into(), serde_json::json!(s)); }
+            }
+            Some((ids, params))
+        }
+
         _ => None,
     }
 }
@@ -416,6 +455,13 @@ fn build_create_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) ->
             Some((vec![], params))
         }
 
+        "batch_create_nodes" => {
+            let mut params = serde_json::Map::new();
+            if let Some(nodes) = args.get("nodes").cloned() { params.insert("nodes".into(), nodes); }
+            copy_opt_str(args, &mut params, "parentId");
+            Some((vec![], params))
+        }
+
         _ => None,
     }
 }
@@ -444,6 +490,39 @@ fn build_modify_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) ->
             copy_opt_f64(args, &mut params, "strokeWeight");
             copy_opt_str(args, &mut params, "mode");
             Some((ids, params))
+        }
+
+        "set_gradient_fill" => {
+            let ids: Vec<String> = get_str_array(args, "nodeIds").into_iter().map(|s| normalize_node_id(&s)).collect();
+            let mut params = serde_json::Map::new();
+            copy_opt_str(args, &mut params, "gradientType");
+            if let Some(stops) = args.get("stops").cloned() { params.insert("stops".into(), stops); }
+            if let Some(gt) = args.get("gradientTransform").cloned() { params.insert("gradientTransform".into(), gt); }
+            copy_opt_str(args, &mut params, "mode");
+            Some((ids, params))
+        }
+
+        "set_viewport" => {
+            let mut params = serde_json::Map::new();
+            if let Some(z) = get_f64(args, "zoom") { params.insert("zoom".into(), serde_json::json!(z)); }
+            if let Some(c) = args.get("center").cloned() { params.insert("center".into(), c); }
+            copy_opt_str(args, &mut params, "scrollTo");
+            Some((vec![], params))
+        }
+
+        "set_plugin_data" => {
+            let id = get_str(args, "nodeId");
+            let node_ids = if id.is_empty() { vec![] } else { vec![normalize_node_id(&id)] };
+            let mut params = serde_json::Map::new();
+            params.insert("key".into(), Value::String(get_str(args, "key")));
+            params.insert("value".into(), Value::String(get_str(args, "value")));
+            copy_opt_str(args, &mut params, "scope");
+            Some((node_ids, params))
+        }
+
+        "set_text_range" => {
+            let node_id = normalize_node_id(&get_str(args, "nodeId"));
+            Some((vec![node_id], args.clone()))
         }
 
         "move_nodes" | "resize_nodes" | "delete_nodes" | "set_visible" | "set_locked"
@@ -549,6 +628,15 @@ fn build_modify_rpc_params(tool: &str, args: &serde_json::Map<String, Value>) ->
             let component_id = normalize_node_id(&get_str(args, "componentId"));
             let mut params = serde_json::Map::new();
             params.insert("componentId".into(), Value::String(component_id));
+            Some((vec![node_id], params))
+        }
+
+        "set_component_property" => {
+            let node_id = normalize_node_id(&get_str(args, "nodeId"));
+            let mut params = serde_json::Map::new();
+            params.insert("name".into(), Value::String(get_str(args, "name")));
+            params.insert("type".into(), Value::String(get_str(args, "type")));
+            copy_opt_str(args, &mut params, "defaultValue");
             Some((vec![node_id], params))
         }
 

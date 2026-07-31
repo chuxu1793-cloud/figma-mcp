@@ -11,6 +11,7 @@ pub mod prompts;
 pub mod schema;
 pub mod server;
 pub mod tool_helpers;
+pub mod tool_registry;
 pub mod tools;
 pub mod tools_read_defs;
 pub mod tools_write_component_defs;

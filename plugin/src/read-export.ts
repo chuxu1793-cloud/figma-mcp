@@ -85,6 +85,46 @@ export const handleReadExportRequest = async (request: any) => {
       };
     }
 
+    case "export_nodes": {
+      const p = request.params || {};
+      const format = p.format || "PNG";
+      const scale = p.scale != null ? p.scale : 2;
+      let targetNodes: any[];
+      if (request.nodeIds && request.nodeIds.length > 0) {
+        const nodes = await Promise.all(
+          request.nodeIds.map((id: string) => figma.getNodeByIdAsync(id)),
+        );
+        targetNodes = nodes.filter((n) => n !== null && n.type !== "DOCUMENT" && n.type !== "PAGE");
+      } else {
+        targetNodes = figma.currentPage.selection.slice();
+      }
+      if (targetNodes.length === 0) throw new Error("No nodes to export. Select nodes or provide nodeIds.");
+      const exports = await Promise.all(
+        targetNodes.map(async (node: any) => {
+          const settings: any =
+            format === "SVG" ? { format: "SVG" }
+            : format === "PDF" ? { format: "PDF" }
+            : format === "JPG" ? { format: "JPG", constraint: { type: "SCALE", value: scale } }
+            : { format: "PNG", constraint: { type: "SCALE", value: scale } };
+          const bytes = await node.exportAsync(settings);
+          const base64 = figma.base64Encode(bytes);
+          return {
+            nodeId: node.id,
+            nodeName: node.name,
+            format,
+            base64,
+            width: node.width,
+            height: node.height,
+          };
+        }),
+      );
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { count: exports.length, exports },
+      };
+    }
+
     default:
       return null;
   }

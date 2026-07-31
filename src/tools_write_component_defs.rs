@@ -2,7 +2,7 @@ use rmcp::model::Tool;
 
 use crate::tool_helpers::*;
 
-/// Component tools: group_nodes, ungroup_nodes, swap_component, detach_instance (4 tools)
+/// Component tools: group_nodes, ungroup_nodes, swap_component, detach_instance, set_component_property (5 tools)
 pub fn write_component_tools() -> Vec<Tool> {
     vec![
         tool("group_nodes", "Group two or more nodes into a GROUP. All nodes must share the same parent.",
@@ -22,5 +22,13 @@ pub fn write_component_tools() -> Vec<Tool> {
 
         tool("detach_instance", "Detach one or more component instances, converting them to plain frames. The link to the main component is broken; all visual properties are preserved.",
             schema_mixed(&[("nodeIds", arr_s("INSTANCE node IDs in colon format e.g. ['4029:12345']"), true)])),
+
+        tool("set_component_property", "Add a new component property (variant, boolean, or text) to a COMPONENT or COMPONENT_SET. Use this to create variant properties for component sets.",
+            schema_mixed(&[
+                ("nodeId", s("COMPONENT or COMPONENT_SET node ID in colon format e.g. '4029:12345'"), true),
+                ("name", s("Property name e.g. 'State', 'Size', 'Disabled'"), true),
+                ("type", s("Property type: BOOLEAN, TEXT, or VARIANT"), true),
+                ("defaultValue", s("Default value for the property. BOOLEAN: true/false, TEXT: string, VARIANT: e.g. 'Default'"), false),
+            ])),
     ]
 }

@@ -1,5 +1,5 @@
 import { getBounds } from "./serializers";
-import { makeSolidPaint, getParentNode, applyAutoLayout } from "./write-helpers";
+import { makeSolidPaint, getParentNode, applyAutoLayout, hexToRgb } from "./write-helpers";
 
 const isMixed = (v: unknown): v is symbol => typeof v === "symbol";
 
@@ -449,6 +449,128 @@ export const handleWriteModifyRequest = async (request: any) => {
       figma.commitUndo();
       const successCount = results.filter((r: any) => !r.error).length;
       return { type: request.type, requestId: request.requestId, data: { replaced: successCount, results } };
+    }
+
+    case "set_gradient_fill": {
+      const p = request.params || {};
+      const nodeIds = request.nodeIds || [];
+      if (nodeIds.length === 0) throw new Error("nodeIds is required");
+      const gradientType = p.gradientType || "GRADIENT_LINEAR";
+      const stops = p.stops || [];
+      if (stops.length < 2) throw new Error("at least 2 gradient stops are required");
+      const paintStops = stops.map((s: any) => {
+        const { r, g, b, a } = hexToRgb(s.color || "#000000");
+        return {
+          position: s.position != null ? Number(s.position) : 0,
+          color: { r, g, b, a: s.opacity != null ? Number(s.opacity) : a },
+        };
+      });
+      const gradientPaint: GradientPaint = {
+        type: gradientType as GradientPaint["type"],
+        gradientStops: paintStops,
+        gradientTransform: p.gradientTransform || [[1, 0, 0], [0, 1, 0]],
+      };
+      const results: any[] = [];
+      for (const nid of nodeIds) {
+        const node = await figma.getNodeByIdAsync(nid) as any;
+        if (!node) { results.push({ nodeId: nid, error: "Node not found" }); continue; }
+        if (!("fills" in node)) { results.push({ nodeId: nid, error: "Node does not support fills" }); continue; }
+        const currentFills = (node as any).fills;
+        const fills = isMixed(currentFills) ? [] : currentFills as Paint[];
+        (node as any).fills = p.mode === "append" ? [...fills, gradientPaint] : [gradientPaint];
+        results.push({ nodeId: nid, name: node.name });
+      }
+      figma.commitUndo();
+      return { type: request.type, requestId: request.requestId, data: { results } };
+    }
+
+    case "set_viewport": {
+      const p = request.params || {};
+      if (p.zoom != null) {
+        const center = p.center || figma.viewport.center;
+        figma.viewport.zoom = Number(p.zoom);
+        if (p.center) {
+          figma.viewport.center = { x: Number(p.center.x), y: Number(p.center.y) };
+        }
+      } else if (p.center) {
+        figma.viewport.center = { x: Number(p.center.x), y: Number(p.center.y) };
+      }
+      if (p.scrollTo) {
+        const node = await figma.getNodeByIdAsync(p.scrollTo) as any;
+        if (node) figma.viewport.scrollAndZoomIntoView([node]);
+      }
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: {
+          center: { x: figma.viewport.center.x, y: figma.viewport.center.y },
+          zoom: figma.viewport.zoom,
+        },
+      };
+    }
+
+    case "set_plugin_data": {
+      const p = request.params || {};
+      const nodeId = request.nodeIds && request.nodeIds[0];
+      const key = p.key;
+      const value = p.value || "";
+      const scope = p.scope || "plugin";
+      if (!key) throw new Error("key is required");
+      let node: any;
+      if (nodeId) {
+        node = await figma.getNodeByIdAsync(nodeId);
+        if (!node) throw new Error(`Node not found: ${nodeId}`);
+      } else {
+        node = figma.currentPage;
+      }
+      if (scope === "shared") {
+        await node.setSharedPluginDataAsync("figma-mcp", key, value);
+      } else {
+        await node.setPluginDataAsync(key, value);
+      }
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { nodeId: node.id, key, scope, value, saved: true },
+      };
+    }
+
+    case "set_text_range": {
+      const p = request.params || {};
+      const nodeId = request.nodeIds && request.nodeIds[0];
+      if (!nodeId) throw new Error("nodeId is required");
+      const node = await figma.getNodeByIdAsync(nodeId) as any;
+      if (!node) throw new Error(`Node not found: ${nodeId}`);
+      if (node.type !== "TEXT") throw new Error(`Node ${nodeId} is not a TEXT node`);
+      const start = p.start != null ? Number(p.start) : 0;
+      const end = p.end != null ? Number(p.end) : node.characters.length;
+      const fontName = typeof node.fontName === "symbol"
+        ? { family: "Inter", style: "Regular" }
+        : node.fontName;
+      await figma.loadFontAsync(fontName);
+      if (p.fontSize != null) {
+        await node.setFontSizeAsync({ start, end }, Number(p.fontSize));
+      }
+      if (p.fillColor) {
+        const { r, g, b, a } = hexToRgb(p.fillColor);
+        await node.setFillsColorAsync({ start, end }, { r, g, b, a: a });
+      }
+      if (p.fontFamily || p.fontStyle) {
+        const family = p.fontFamily || fontName.family;
+        const style = p.fontStyle || fontName.style;
+        await figma.loadFontAsync({ family, style });
+        await node.setFontNameAsync({ start, end }, { family, style });
+      }
+      if (p.textDecoration) {
+        await node.setTextDecorationAsync({ start, end }, p.textDecoration);
+      }
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: node.id, start, end, modified: true },
+      };
     }
 
     default:

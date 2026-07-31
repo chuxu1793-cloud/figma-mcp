@@ -1,4 +1,5 @@
 use rmcp::model::Tool;
+use serde_json::json;
 
 use crate::tool_helpers::*;
 
@@ -6,7 +7,8 @@ use crate::tool_helpers::*;
 /// rename_node, clone_node, set_opacity, set_corner_radius, set_auto_layout,
 /// delete_nodes, set_visible, set_locked, rotate_nodes, reorder_nodes,
 /// set_blend_mode, set_constraints, reparent_nodes, batch_rename_nodes,
-/// find_replace_text, set_text_properties (21 tools)
+/// find_replace_text, set_text_properties, set_gradient_fill, set_viewport,
+/// set_plugin_data, set_text_range (25 tools)
 pub fn write_modify_tools() -> Vec<Tool> {
     vec![
         tool("set_text", "Update the text content of an existing TEXT node.",
@@ -172,6 +174,50 @@ pub fn write_modify_tools() -> Vec<Tool> {
                 ("textCase", s("Text case: ORIGINAL, UPPER, LOWER, TITLE, or SMALL_CAPS"), false),
                 ("textAlignHorizontal", s("Horizontal alignment: LEFT, CENTER, RIGHT, or JUSTIFIED"), false),
                 ("textAlignVertical", s("Vertical alignment: TOP, CENTER, or BOTTOM"), false),
+            ])),
+
+        tool("set_gradient_fill", "Set a gradient fill on one or more nodes. Supports linear, radial, diamond, and angular gradient types. Use mode='append' to stack the gradient on top of existing fills.",
+            schema_mixed(&[
+                ("nodeIds", arr_s("Node IDs in colon format e.g. ['4029:12345']"), true),
+                ("gradientType", s("Gradient type: GRADIENT_LINEAR, GRADIENT_RADIAL, GRADIENT_DIAMOND, or GRADIENT_ANGULAR"), true),
+                ("stops", arr_o("Array of gradient stops", json!({
+                    "type": "object",
+                    "properties": {
+                        "color": {"type": "string", "description": "Stop color as hex e.g. #FF5733"},
+                        "position": {"type": "number", "description": "Position along gradient 0–1"},
+                        "opacity": {"type": "number", "description": "Stop opacity 0–1 (default 1)"}
+                    },
+                    "required": ["color", "position"]
+                })), true),
+                ("gradientTransform", s("Optional 2x3 transform matrix as JSON array e.g. [[1,0,0],[0,1,0]]"), false),
+                ("mode", s("'replace' (default) or 'append'"), false),
+            ])),
+
+        tool("set_viewport", "Control the Figma viewport — zoom, pan to a center point, or scroll to a specific node. Useful for programmatic navigation and screenshots.",
+            schema_mixed(&[
+                ("zoom", n("Zoom level (e.g. 1.0 = 100%)"), false),
+                ("center", s("Center point as JSON: {\"x\": 0, \"y\": 0}"), false),
+                ("scrollTo", s("Node ID to scroll and zoom into, colon format"), false),
+            ])),
+
+        tool("set_plugin_data", "Store custom plugin data on a node or the current page. Data is accessible via get_plugin_data. Use scope='shared' for sharedPluginData (accessible by other plugins).",
+            schema_mixed(&[
+                ("nodeId", s("Node ID to store data on, colon format. Defaults to current page."), false),
+                ("key", s("Data key"), true),
+                ("value", s("Data value (string). Pass empty string to delete."), true),
+                ("scope", s("Data scope: 'plugin' (default) or 'shared'"), false),
+            ])),
+
+        tool("set_text_range", "Format a character range within a TEXT node. Allows setting fontSize, fillColor, fontFamily, fontStyle, and textDecoration on a subset of characters (e.g. partial bold). The font must be installed in Figma.",
+            schema_mixed(&[
+                ("nodeId", s("TEXT node ID in colon format e.g. '4029:12345'"), true),
+                ("start", n("Start character index (0-based, default 0)"), false),
+                ("end", n("End character index (exclusive, default = text length)"), false),
+                ("fontSize", n("Font size in pixels for this range"), false),
+                ("fillColor", s("Text color as hex for this range e.g. #FF5733"), false),
+                ("fontFamily", s("Font family for this range"), false),
+                ("fontStyle", s("Font style for this range e.g. 'Bold', 'Italic'"), false),
+                ("textDecoration", s("Text decoration: NONE, UNDERLINE, or STRIKETHROUGH"), false),
             ])),
     ]
 }

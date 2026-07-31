@@ -583,3 +583,47 @@ Ask the user:
 - Never modify the original source node.
 - Keep all variants on the same page unless the user requests otherwise.
 - Add a text label below each variant showing its name."##;
+
+pub const ANALYZE_DESIGN_SYSTEM: &str = r##"Analyze the current document's design system maturity. Follow these steps:
+
+1. Call get_styles to list all local paint, text, effect, and grid styles. Note any naming inconsistencies or missing group structure.
+2. Call get_variable_defs to inspect variable collections and modes. Check for:
+   - Color variables that duplicate paint styles (same value in both)
+   - Variables without clear naming conventions (no slash-separated groups)
+   - Missing modes for theming (e.g. no Light/Dark)
+3. Call get_local_components to list all components. Check for:
+   - Components without variant properties that should have them (e.g. states, sizes)
+   - Component sets with incomplete coverage
+   - Naming convention issues
+4. Call get_fonts to see all fonts in use. Flag:
+   - More than 3 font families (potential inconsistency)
+   - Fonts without corresponding text styles
+5. Use get_design_context with detail=compact on key screens to check:
+   - Nodes using raw fill colors instead of styles/variables
+   - Text nodes without text styles applied
+   - Inconsistent spacing patterns
+6. Provide a maturity score (1-5) for each category: Styles, Variables, Components, Typography, Spacing
+7. List the top 5 actionable improvements, prioritized by impact."##;
+
+pub const COMPONENT_AUDIT: &str = r##"Audit component usage across the current document. Follow these steps:
+
+1. Call get_local_components to get all component definitions. Note their IDs and names.
+2. Use get_design_context with dedupe_components=true on each page to find all instances:
+   - The componentDefs map shows unique component definitions
+   - The context tree shows where instances are used and their overrides
+3. For each component, identify:
+   - How many instances exist (search_nodes by component name)
+   - Whether any instances have text overrides (check overrides array in deduped context)
+   - Whether any instances have property overrides (componentProperties differ from defaults)
+4. Flag issues:
+   - Instances with overrides that should be new variants instead
+   - Components with zero instances (unused — candidates for deletion)
+   - Instances that should be detached (unique overrides making them non-reusable)
+   - Missing common variants (e.g. a Button component without disabled/active states)
+5. Use scan_nodes_by_types with ['INSTANCE'] on the current page to find all instances
+6. For each instance with overrides, use get_nodes_info to inspect the override details
+7. Produce a report:
+   - Component usage summary (component name → instance count → override count)
+   - List of orphaned components (defined but not used)
+   - List of instances with overrides that should be promoted to variants
+   - Recommended new variants to create"##;

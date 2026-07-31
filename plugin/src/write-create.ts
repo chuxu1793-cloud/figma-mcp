@@ -226,6 +226,71 @@ export const handleWriteCreateRequest = async (request: any) => {
       };
     }
 
+    case "batch_create_nodes": {
+      const p = request.params || {};
+      const nodes = p.nodes || [];
+      if (nodes.length === 0) throw new Error("nodes array is required");
+      const parent = await getParentNode(p.parentId);
+      const results: any[] = [];
+      for (const spec of nodes) {
+        let node: any;
+        switch (spec.type) {
+          case "frame": {
+            node = figma.createFrame();
+            node.resize(spec.width || 100, spec.height || 100);
+            node.x = spec.x != null ? spec.x : 0;
+            node.y = spec.y != null ? spec.y : 0;
+            if (spec.name) node.name = spec.name;
+            if (spec.fillColor) node.fills = [makeSolidPaint(spec.fillColor)];
+            break;
+          }
+          case "rectangle": {
+            node = figma.createRectangle();
+            node.resize(spec.width || 100, spec.height || 100);
+            node.x = spec.x != null ? spec.x : 0;
+            node.y = spec.y != null ? spec.y : 0;
+            if (spec.name) node.name = spec.name;
+            if (spec.fillColor) node.fills = [makeSolidPaint(spec.fillColor)];
+            break;
+          }
+          case "ellipse": {
+            node = figma.createEllipse();
+            node.resize(spec.width || 100, spec.height || 100);
+            node.x = spec.x != null ? spec.x : 0;
+            node.y = spec.y != null ? spec.y : 0;
+            if (spec.name) node.name = spec.name;
+            if (spec.fillColor) node.fills = [makeSolidPaint(spec.fillColor)];
+            break;
+          }
+          case "text": {
+            const fontFamily = spec.fontFamily || "Inter";
+            const fontStyle = spec.fontStyle || "Regular";
+            await figma.loadFontAsync({ family: fontFamily, style: fontStyle });
+            node = figma.createText();
+            node.fontName = { family: fontFamily, style: fontStyle };
+            if (spec.fontSize != null) node.fontSize = Number(spec.fontSize);
+            node.characters = spec.text || "";
+            node.x = spec.x != null ? spec.x : 0;
+            node.y = spec.y != null ? spec.y : 0;
+            if (spec.name) node.name = spec.name;
+            if (spec.fillColor) node.fills = [makeSolidPaint(spec.fillColor)];
+            break;
+          }
+          default:
+            results.push({ error: `Unknown node type: ${spec.type}` });
+            continue;
+        }
+        (parent as any).appendChild(node);
+        results.push({ id: node.id, name: node.name, type: node.type, bounds: getBounds(node) });
+      }
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { count: results.length, nodes: results },
+      };
+    }
+
     default:
       return null;
   }

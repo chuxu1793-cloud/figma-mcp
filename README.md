@@ -12,9 +12,9 @@ Open-source Figma MCP server written in Rust, with full read/write access via pl
 **Highlights**
 - No Figma API token required
 - No rate limits — free plan friendly
-- **Read and Write** live Figma data via plugin bridge — 75 tools total
+- **Read and Write** live Figma data via plugin bridge — 83 tools total
 - Full design automation — styles, variables, components, prototypes, and content
-- Design strategies included — 12 prompts built in
+- Design strategies included — 14 prompts built in
 - Written in Rust — fast, memory-safe, single binary
 
 ---
@@ -99,9 +99,9 @@ claude mcp add -s project figma -- ~/figma/figma-mcp
 
 ---
 
-## Available Tools (75 total)
+## Available Tools (83 total)
 
-### Read Tools (16)
+### Read Tools (17)
 
 | Category | Tools |
 |----------|-------|
@@ -110,23 +110,24 @@ claude mcp add -s project figma -- ~/figma/figma-mcp
 | Styles | `get_styles`, `get_variable_defs`, `get_local_components`, `get_annotations`, `get_fonts` |
 | Prototype | `get_reactions` |
 | Export | `get_screenshot`, `export_frames_to_pdf`, `export_tokens` |
+| Data | `get_plugin_data` |
 
-### Write Tools (59)
+### Write Tools (66)
 
 | Category | Tools |
 |----------|-------|
-| Create | `create_frame`, `create_rectangle`, `create_ellipse`, `create_text`, `import_image`, `create_component`, `create_section`, `create_line`, `create_star`, `create_polygon` |
-| Modify | `set_text`, `set_text_properties`, `set_fills`, `set_strokes`, `move_nodes`, `resize_nodes`, `rename_node`, `clone_node`, `set_opacity`, `set_corner_radius`, `set_auto_layout`, `delete_nodes`, `set_visible`, `set_locked`, `rotate_nodes`, `reorder_nodes`, `set_blend_mode`, `set_constraints`, `reparent_nodes`, `batch_rename_nodes`, `find_replace_text` |
+| Create | `create_frame`, `create_rectangle`, `create_ellipse`, `create_text`, `import_image`, `create_component`, `create_section`, `create_line`, `create_star`, `create_polygon`, `batch_create_nodes` |
+| Modify | `set_text`, `set_text_properties`, `set_fills`, `set_strokes`, `set_gradient_fill`, `move_nodes`, `resize_nodes`, `rename_node`, `clone_node`, `set_opacity`, `set_corner_radius`, `set_auto_layout`, `delete_nodes`, `set_visible`, `set_locked`, `rotate_nodes`, `reorder_nodes`, `set_blend_mode`, `set_constraints`, `reparent_nodes`, `batch_rename_nodes`, `find_replace_text`, `set_viewport`, `set_plugin_data`, `set_text_range` |
 | Styles | `create_paint_style`, `create_text_style`, `create_effect_style`, `create_grid_style`, `update_paint_style`, `update_text_style`, `update_effect_style`, `update_grid_style`, `delete_style`, `apply_style_to_node`, `set_effects`, `bind_variable_to_node` |
 | Variables | `create_variable_collection`, `add_variable_mode`, `create_variable`, `set_variable_value`, `delete_variable` |
-| Components | `group_nodes`, `ungroup_nodes`, `swap_component`, `detach_instance` |
+| Components | `group_nodes`, `ungroup_nodes`, `swap_component`, `detach_instance`, `set_component_property` |
 | Prototype | `set_reactions`, `remove_reactions` |
 | Pages | `navigate_to_page`, `add_page`, `delete_page`, `rename_page` |
-| Export | `export_frames_to_pdf` |
+| Export | `export_frames_to_pdf`, `export_nodes` |
 
-### MCP Prompts (12)
+### MCP Prompts (14)
 
-`read_design_strategy`, `design_strategy`, `text_replacement_strategy`, `annotation_conversion_strategy`, `swap_overrides_instances`, `reaction_to_connector_strategy`, `style_audit_strategy`, `bulk_rename_strategy`, `design_token_generation_strategy`, `generate_color_palette`, `generate_type_scale`, `generate_component_variants`
+`read_design_strategy`, `design_strategy`, `text_replacement_strategy`, `annotation_conversion_strategy`, `swap_overrides_instances`, `reaction_to_connector_strategy`, `style_audit_strategy`, `bulk_rename_strategy`, `design_token_generation_strategy`, `generate_color_palette`, `generate_type_scale`, `generate_component_variants`, `analyze_design_system`, `component_audit`
 
 ---
 

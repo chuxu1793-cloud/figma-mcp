@@ -169,6 +169,24 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
             }
         }
 
+        "get_plugin_data" => {
+            let key = params.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            if key.is_empty() { return Err("key is required".into()); }
+        }
+
+        "export_nodes" => {
+            for id in node_ids {
+                if !valid_node_id(id) {
+                    return Err(format!("invalid nodeId: {} — must use colon format e.g. 4029:12345", id));
+                }
+            }
+            if let Some(format) = params.get("format").and_then(|v| v.as_str()) {
+                if !valid_export_format(format) {
+                    return Err(format!("format must be PNG, SVG, JPG, or PDF, got: {}", format));
+                }
+            }
+        }
+
         "create_frame" => {
             if let Some(w) = params.get("width").and_then(|v| v.as_f64()) {
                 if w <= 0.0 { return Err("width must be positive".into()); }
@@ -609,6 +627,55 @@ pub fn validate_rpc(tool: &str, node_ids: &[String], params: &Map<String, Value>
             }
             if let Some(h) = params.get("height").and_then(|v| v.as_f64()) {
                 if h <= 0.0 { return Err("height must be positive".into()); }
+            }
+        }
+
+        "batch_create_nodes" => {
+            let nodes = params.get("nodes").and_then(|v| v.as_array()).ok_or("nodes array is required")?;
+            if nodes.is_empty() { return Err("nodes array must not be empty".into()); }
+            for (i, n) in nodes.iter().enumerate() {
+                let spec = n.as_object().ok_or_else(|| format!("nodes[{}] must be an object", i))?;
+                let t = spec.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                if !["frame", "rectangle", "ellipse", "text"].contains(&t) {
+                    return Err(format!("nodes[{}].type must be frame, rectangle, ellipse, or text, got: {}", i, t));
+                }
+            }
+        }
+
+        "set_gradient_fill" => {
+            validate_node_ids(node_ids)?;
+            let gt = params.get("gradientType").and_then(|v| v.as_str()).unwrap_or("");
+            if !["GRADIENT_LINEAR", "GRADIENT_RADIAL", "GRADIENT_DIAMOND", "GRADIENT_ANGULAR"].contains(&gt) {
+                return Err(format!("gradientType must be GRADIENT_LINEAR, GRADIENT_RADIAL, GRADIENT_DIAMOND, or GRADIENT_ANGULAR, got: {}", gt));
+            }
+            let stops = params.get("stops").and_then(|v| v.as_array()).ok_or("stops array is required")?;
+            if stops.len() < 2 { return Err("at least 2 gradient stops are required".into()); }
+        }
+
+        "set_viewport" => {
+            // No strict validation — at least one of zoom/center/scrollTo should be provided
+        }
+
+        "set_plugin_data" => {
+            let key = params.get("key").and_then(|v| v.as_str()).unwrap_or("");
+            if key.is_empty() { return Err("key is required".into()); }
+            if !params.contains_key("value") { return Err("value is required".into()); }
+        }
+
+        "set_text_range" => {
+            require_single_node_id(node_ids)?;
+            if let Some(start) = params.get("start").and_then(|v| v.as_f64()) {
+                if start < 0.0 { return Err("start must be non-negative".into()); }
+            }
+        }
+
+        "set_component_property" => {
+            require_single_node_id(node_ids)?;
+            let name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if name.is_empty() { return Err("name is required".into()); }
+            let pt = params.get("type").and_then(|v| v.as_str()).unwrap_or("");
+            if !["BOOLEAN", "TEXT", "VARIANT"].contains(&pt) {
+                return Err(format!("type must be BOOLEAN, TEXT, or VARIANT, got: {}", pt));
             }
         }
 

@@ -117,6 +117,31 @@ export const handleWriteComponentRequest = async (request: any) => {
       return { type: request.type, requestId: request.requestId, data: { results } };
     }
 
+    case "set_component_property": {
+      const p = request.params || {};
+      const nodeId = request.nodeIds && request.nodeIds[0];
+      if (!nodeId) throw new Error("nodeId is required");
+      if (!p.name) throw new Error("name is required");
+      if (!p.type) throw new Error("type is required");
+      const node = await figma.getNodeByIdAsync(nodeId);
+      if (!node) throw new Error(`Node not found: ${nodeId}`);
+      if (node.type !== "COMPONENT" && node.type !== "COMPONENT_SET") {
+        throw new Error(`Node ${nodeId} is not a COMPONENT or COMPONENT_SET`);
+      }
+      const component = node as any;
+      const propType = p.type as "BOOLEAN" | "TEXT" | "VARIANT";
+      const initialValue = p.defaultValue != null ? p.defaultValue
+        : propType === "BOOLEAN" ? false
+        : propType === "TEXT" ? "" : "Default";
+      component.addProperty(p.name, propType, initialValue);
+      figma.commitUndo();
+      return {
+        type: request.type,
+        requestId: request.requestId,
+        data: { id: component.id, name: component.name, propertyName: p.name, propertyType: propType },
+      };
+    }
+
     default:
       return null;
   }

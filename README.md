@@ -3,7 +3,7 @@
 Figma MCP — Free, No Rate Limits (Rust Edition)
 <p>
   <a href="https://github.com/chuxu1793-cloud/figma-mcp/releases"><img src="https://img.shields.io/github/v/release/chuxu1793-cloud/figma-mcp?color=blue" alt="release version" /></a>
-  <a href="https://www.npmjs.com/package/@tuanjie/figma-mcp"><img src="https://img.shields.io/npm/v/@tuanjie/figma-mcp?color=cb3837&logo=npm" alt="npm version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
   <a href="https://github.com/chuxu1793-cloud/figma-mcp/stargazers"><img src="https://img.shields.io/github/stars/chuxu1793-cloud/figma-mcp?style=social" alt="GitHub stars" /></a>
 </p>
 
@@ -23,16 +23,7 @@ Figma MCP server written in Rust, with full read/write access via plugin — no 
 
 ## Installation & Setup
 
-### 1a. Install via npm (recommended)
-
-```bash
-npx -y @tuanjie/figma-mcp
-```
-
-The npm package bundles the binary for your platform, so `npx` works without any download step.
-The Figma plugin still has to be fetched from the [latest release](https://github.com/chuxu1793-cloud/figma-mcp/releases/latest) (`figma-plugin.zip`).
-
-### 1b. Install via install script
+### 1a. Install via install script (recommended)
 
 ```bash
 curl -sL https://raw.githubusercontent.com/chuxu1793-cloud/figma-mcp/main/install.sh | bash
@@ -47,7 +38,7 @@ curl -sL https://raw.githubusercontent.com/chuxu1793-cloud/figma-mcp/main/instal
 VERSION=v0.1.0 bash -c "$(curl -sL https://raw.githubusercontent.com/chuxu1793-cloud/figma-mcp/main/install.sh)"
 ```
 
-### 1c. Manual install
+### 1b. Manual install
 
 ```bash
 # Create install directory
@@ -90,18 +81,6 @@ claude mcp add -s project figma -- ~/figma/figma-mcp
   "mcpServers": {
     "figma": {
       "command": "/Users/YOUR_USERNAME/figma/figma-mcp"
-    }
-  }
-}
-```
-
-Or, if installed via npm:
-```json
-{
-  "mcpServers": {
-    "figma": {
-      "command": "npx",
-      "args": ["-y", "@tuanjie/figma-mcp"]
     }
   }
 }

@@ -68,6 +68,18 @@ Each release also ships `SHA256SUMS.txt` for verification:
 shasum -a 256 -c SHA256SUMS.txt --ignore-missing
 ```
 
+### 1c. Let an AI agent do it (Codely CLI)
+
+Install the bundled skill and let the agent handle download, config registration, and verification:
+
+```bash
+curl -L -O https://raw.githubusercontent.com/chuxu1793-cloud/figma-mcp/main/skill/figma-mcp-setup.skill
+codely skills install figma-mcp-setup.skill --scope user
+# then in Codely CLI: /skills reload
+```
+
+Afterwards just say "安装 figma-mcp" / "figma mcp 连不上" and the agent runs the install, registers the MCP entry for your client, and probes the plugin bridge. Sources live in [`skill/figma-mcp-setup/`](skill/figma-mcp-setup).
+
 ### 2. Configure your AI tool
 
 **Claude Code CLI**

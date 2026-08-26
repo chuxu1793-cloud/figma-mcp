@@ -12,14 +12,19 @@ const HOME = os.homedir();
 // key: [config path, config shape]
 // shape 'mcpServers' -> { mcpServers: { name: { command } } }
 // shape 'servers'    -> { servers: { name: { type: 'stdio', command } } }  (VS Code family)
+function claudeDesktopConfig() {
+  if (process.platform === 'darwin') {
+    return path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+  }
+  if (process.platform === 'win32') {
+    return path.join(process.env.APPDATA || path.join(HOME, 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+  }
+  return path.join(HOME, '.config', 'Claude', 'claude_desktop_config.json');
+}
+
 const CLIENTS = {
   codely: [path.join(HOME, '.codely-cli', 'settings.json'), 'mcpServers'],
-  'claude-desktop': [
-    process.platform === 'darwin'
-      ? path.join(HOME, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json')
-      : path.join(HOME, '.config', 'Claude', 'claude_desktop_config.json'),
-    'mcpServers',
-  ],
+  'claude-desktop': [claudeDesktopConfig(), 'mcpServers'],
   'claude-code': [path.join(process.cwd(), '.mcp.json'), 'mcpServers'],
   cursor: [path.join(HOME, '.cursor', 'mcp.json'), 'mcpServers'],
   'cursor-project': [path.join(process.cwd(), '.cursor', 'mcp.json'), 'mcpServers'],

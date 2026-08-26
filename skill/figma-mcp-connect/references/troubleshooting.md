@@ -35,14 +35,27 @@ Contents: architecture detail · symptom table · plugin import steps · Windows
 
 One-time only: after step 3 the plugin stays in the Development menu.
 
-## Windows setup (scripts here do not run on Windows)
+## Windows without Git Bash or WSL
 
-1. Download `figma-mcp-windows-amd64.exe` and `figma-plugin.zip` from https://github.com/chuxu1793-cloud/figma-mcp/releases/latest into a folder such as `%USERPROFILE%\figma`, renaming the binary to `figma-mcp.exe`.
-2. Extract `figma-plugin.zip` in that folder — it contains a top-level `plugin\` directory.
-3. Add the MCP entry manually using the shapes below, with a double-escaped path, e.g. `"command": "C:\\Users\\you\\figma\\figma-mcp.exe"`.
-4. Import `plugin\manifest.json` in the Figma Desktop app as described above.
+`install.sh` and `doctor.sh` need a POSIX shell. With Git Bash or WSL they work as-is (the `.exe` asset is selected automatically). Without one, do this in PowerShell:
+
+```powershell
+$dir = "$env:USERPROFILE\figma"; New-Item -ItemType Directory -Force $dir | Out-Null
+$base = "https://github.com/chuxu1793-cloud/figma-mcp/releases/latest/download"
+Invoke-WebRequest "$base/figma-mcp-windows-amd64.exe" -OutFile "$dir\figma-mcp.exe"
+Invoke-WebRequest "$base/figma-plugin.zip" -OutFile "$dir\figma-plugin.zip"
+Expand-Archive -Force "$dir\figma-plugin.zip" $dir; Remove-Item "$dir\figma-plugin.zip"
+Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$dir\SHA256SUMS.txt"
+(Get-FileHash "$dir\figma-mcp.exe" -Algorithm SHA256).Hash.ToLower()   # compare with SHA256SUMS.txt
+```
+
+Then register manually with a double-escaped path — `"command": "C:\\Users\\you\\figma\\figma-mcp.exe"` — using the shapes below, and import `plugin\manifest.json` in Figma Desktop.
 
 Verification without the scripts: `curl http://127.0.0.1:1994/ping` while an MCP client session is running.
+
+## Linux
+
+Binary and registration work normally (`figma-mcp-linux-amd64`; no arm64 asset). Figma ships no official Linux desktop app, and development plugins cannot be imported in a browser tab — so the plugin bridge cannot be established with official software. Options: run the client/plugin on a macOS or Windows machine and point the plugin at that host's port, or use an unofficial Figma Linux build (untested here).
 
 ## Environment variables
 

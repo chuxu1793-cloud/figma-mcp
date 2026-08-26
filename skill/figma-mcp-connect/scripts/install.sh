@@ -28,10 +28,15 @@ esac
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
+# Git Bash / MSYS2 / Cygwin report mingw64_nt-*, msys_nt-*, cygwin_nt-*
+case "$OS" in mingw*|msys*|cygwin*) OS="windows" ;; esac
+
+EXE=""
 case "$OS-$ARCH" in
-  darwin-arm64)  ASSET="figma-mcp-darwin-arm64" ;;
-  darwin-x86_64) ASSET="figma-mcp-darwin-amd64" ;;
-  linux-x86_64)  ASSET="figma-mcp-linux-amd64" ;;
+  darwin-arm64)   ASSET="figma-mcp-darwin-arm64" ;;
+  darwin-x86_64)  ASSET="figma-mcp-darwin-amd64" ;;
+  linux-x86_64)   ASSET="figma-mcp-linux-amd64" ;;
+  windows-x86_64) ASSET="figma-mcp-windows-amd64.exe"; EXE=".exe" ;;
   *) fail "unsupported platform $OS-$ARCH; prebuilt targets are darwin-arm64, darwin-amd64, linux-amd64, windows-amd64" ;;
 esac
 
@@ -42,12 +47,23 @@ else
 fi
 
 command -v curl >/dev/null || fail "curl not found"
-command -v unzip >/dev/null || fail "unzip not found"
 if command -v shasum >/dev/null; then SHA="shasum -a 256"
 elif command -v sha256sum >/dev/null; then SHA="sha256sum"
 else SHA=""; fi
 
-BIN="$DIR/figma-mcp"
+# Git Bash ships no unzip; fall back to PowerShell's Expand-Archive.
+extract() {
+  if command -v unzip >/dev/null; then
+    unzip -qo "$1" -d "$2"
+  elif command -v powershell.exe >/dev/null && command -v cygpath >/dev/null; then
+    powershell.exe -NoProfile -Command \
+      "Expand-Archive -Force -LiteralPath '$(cygpath -w "$1")' -DestinationPath '$(cygpath -w "$2")'" >/dev/null
+  else
+    return 1
+  fi
+}
+
+BIN="$DIR/figma-mcp$EXE"
 MANIFEST="$DIR/plugin/manifest.json"
 TMP=$(mktemp -d) || fail "cannot create temp dir"
 trap 'rm -rf "$TMP"' EXIT
@@ -88,7 +104,7 @@ else
 
   install -m 755 "$TMP/$ASSET" "$BIN" || fail "cannot write $BIN"
   rm -rf "$DIR/plugin"
-  unzip -qo "$TMP/figma-plugin.zip" -d "$DIR" || fail "cannot unzip plugin into $DIR"
+  extract "$TMP/figma-plugin.zip" "$DIR" || fail "cannot extract plugin into $DIR (need unzip, or PowerShell on Windows)"
 
   # macOS quarantines curl-downloaded binaries; strip it so Gatekeeper does not
   # block the unsigned binary when the MCP client spawns it.

@@ -15,7 +15,17 @@ Automate everything that can be automated; ask the user only for the Figma GUI s
 - The binary is an MCP **stdio** server — the MCP client spawns it on demand. Never "start it as a service"; nothing listening between sessions is normal.
 - Each process also serves `127.0.0.1:1994` (`GET /ping`, `POST /rpc`, `GET /ws`) and elects a leader by binding the port.
 - The Figma plugin auto-connects on open and retries every 1.5s. Importing/opening it is GUI-only and **cannot** be scripted.
-- The scripts here are bash/Node and cover macOS and Linux. On Windows, do the manual steps in `references/troubleshooting.md` instead of inventing commands.
+
+## Platform matrix — check the OS before choosing commands
+
+| | macOS | Windows | Linux |
+|---|---|---|---|
+| `install.sh` / `doctor.sh` | native | needs Git Bash or WSL (auto-detects MSYS/Cygwin, uses the `.exe` asset, falls back to PowerShell `Expand-Archive` when `unzip` is absent) | native |
+| `register_client.cjs` | native | native (`node` on Windows works; Claude Desktop path resolves to `%APPDATA%\Claude`) | native |
+| Launch Figma | `open -a Figma` | Start menu — no reliable CLI hook; do not invent one | **no official Figma Desktop app** → plugin bridge unavailable |
+| Reveal plugin folder | `open <dir>/plugin` | `explorer.exe <dir>\plugin` (Git Bash) or `explorer <dir>\plugin` (cmd/PowerShell) | `xdg-open <dir>/plugin` |
+
+Determine the OS from the environment context or `uname -s` before emitting any command. On Linux, install and register normally, but state up front that importing the plugin requires the Figma Desktop app, which Figma does not ship for Linux — the server will run without a bridge. If Windows has no Git Bash or WSL, follow the manual sequence in `references/troubleshooting.md` instead of inventing shell commands.
 
 ## Workflow
 
@@ -55,12 +65,7 @@ Then tell the user to restart the client session — MCP config is read at start
 
 ### 4. Bring up the Figma side
 
-Automate the openable parts, then hand off:
-
-```bash
-open -a Figma                    # macOS: launch Figma Desktop
-open <dir>/plugin                # reveal the folder holding manifest.json
-```
+Automate the openable parts using the row for the current OS in the platform matrix above — launch Figma Desktop where a CLI hook exists, and reveal the folder holding `manifest.json`.
 
 Then give the user these exact steps (first time only):
 

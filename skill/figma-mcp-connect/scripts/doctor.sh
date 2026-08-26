@@ -18,9 +18,15 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-BIN="$DIR/figma-mcp"
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+case "$OS" in mingw*|msys*|cygwin*) OS="windows" ;; esac
+EXE=""; [ "$OS" = "windows" ] && EXE=".exe"
+
+DIR="${DIR%/}"
+BIN="$DIR/figma-mcp$EXE"
 MANIFEST="$DIR/plugin/manifest.json"
 NEXT=()
+echo "PLATFORM: $OS"
 
 # --- binary + plugin ---------------------------------------------------------
 if [ -x "$BIN" ]; then
@@ -37,7 +43,7 @@ else
   NEXT+=("run scripts/install.sh")
 fi
 
-if [ "$(uname -s)" = "Darwin" ] && [ -f "$BIN" ]; then
+if [ "$OS" = "darwin" ] && [ -f "$BIN" ]; then
   if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then
     echo "QUARANTINE: present (Gatekeeper will block launch)"
     NEXT+=("xattr -d com.apple.quarantine \"$BIN\"")
@@ -51,6 +57,7 @@ FOUND=()
 for f in "$HOME/.codely-cli/settings.json" \
          "$HOME/Library/Application Support/Claude/claude_desktop_config.json" \
          "$HOME/.config/Claude/claude_desktop_config.json" \
+         "${APPDATA:-$HOME/AppData/Roaming}/Claude/claude_desktop_config.json" \
          "$HOME/.cursor/mcp.json" \
          "$PWD/.mcp.json" "$PWD/.cursor/mcp.json" "$PWD/.vscode/mcp.json"; do
   # Match a command ending in figma-mcp only, so unrelated servers such as
@@ -65,12 +72,23 @@ else
 fi
 
 # --- Figma desktop app -------------------------------------------------------
-if [ "$(uname -s)" = "Darwin" ]; then
-  if pgrep -qx Figma 2>/dev/null; then echo "FIGMA_APP: running"; else
-    echo "FIGMA_APP: not running"
-    NEXT+=("open -a Figma")
-  fi
-fi
+case "$OS" in
+  darwin)
+    if pgrep -qx Figma 2>/dev/null; then echo "FIGMA_APP: running"; else
+      echo "FIGMA_APP: not running"
+      NEXT+=("open -a Figma")
+    fi
+    ;;
+  windows)
+    if tasklist.exe 2>/dev/null | grep -qi '^figma\.exe'; then echo "FIGMA_APP: running"; else
+      echo "FIGMA_APP: not running"
+      NEXT+=("launch Figma Desktop from the Start menu")
+    fi
+    ;;
+  *)
+    echo "FIGMA_APP: unknown (no official Figma Desktop app on this OS)"
+    ;;
+esac
 
 # --- leader + bridge ---------------------------------------------------------
 probe() {

@@ -1,9 +1,9 @@
 ---
-name: figma-mcp-setup
-description: Install, register, start, verify, and troubleshoot the figma-mcp server (Rust Figma MCP with plugin bridge, no Figma API token). Use when the user wants to install or update figma-mcp, set it up in Codely / Claude / Cursor / VS Code, start or connect it, import or open the Figma plugin, or when Figma MCP tools fail with errors like "plugin not connected", "request timed out", tools missing after config, Gatekeeper blocking the binary, or port 1994 conflicts. Triggers on phrasings like "安装 figma-mcp", "配置 figma mcp", "figma mcp 连不上", "插件没连上", "启动 figma mcp", "install figma-mcp", "figma mcp not working".
+name: figma-mcp-connect
+description: Get the figma-mcp server (Rust Figma MCP with plugin bridge, no Figma API token) installed, registered in an MCP client, connected to the Figma plugin, verified, and unblocked. Use when the user wants to install, update, configure, start, or connect figma-mcp in Codely / Claude / Cursor / VS Code, import or open the Figma plugin, or when Figma MCP tools fail with errors like "plugin not connected", "request timed out", tools missing after config, Gatekeeper blocking the binary, or port 1994 conflicts. Triggers on phrasings like "安装 figma-mcp", "配置 figma mcp", "启动 figma mcp", "figma mcp 连不上", "插件没连上", "install figma-mcp", "figma mcp not working".
 ---
 
-# figma-mcp setup
+# figma-mcp connect
 
 Automate everything that can be automated; ask the user only for the Figma GUI steps.
 

@@ -1,13 +1,12 @@
 # figma-mcp troubleshooting
 
-Contents: architecture facts · symptom table · plugin import steps · env vars · manual config shapes
+Contents: architecture detail · symptom table · plugin import steps · Windows setup · env vars · manual config shapes
 
-## Architecture facts that explain most failures
+## Architecture detail beyond SKILL.md
 
-- The binary is an MCP **stdio** server. The MCP client spawns it; it is not a background service. Nothing listening on the port between sessions is normal.
-- Each process also runs an HTTP/WebSocket server on `127.0.0.1:1994` (`--ip`, `--port` to change): `GET /ping`, `POST /rpc`, `GET /ws`.
 - Multiple instances elect a **leader** by binding the port. Only the leader holds the WebSocket to the Figma plugin; followers proxy tool calls to `POST /rpc`. If the leader dies, a follower takes over within ~3–5s.
-- The plugin connects to `ws://<host>:<port>/ws` **automatically** when opened, and retries every 1.5s. There is no Connect button; the gear icon only changes host/port.
+- `--ip` changes the bind address. There is no authentication, so keep it on loopback unless the user explicitly wants remote access.
+- The plugin connects to `ws://<host>:<port>/ws`. There is no Connect button; the gear icon only changes host/port.
 - Host/port entered in the plugin persist via `figma.clientStorage`, not localStorage — they survive restarts and are per Figma user.
 
 ## Symptom table
@@ -35,6 +34,15 @@ Contents: architecture facts · symptom table · plugin import steps · env vars
 5. The plugin window must stay open — closing it drops the WebSocket. It reconnects on its own when reopened.
 
 One-time only: after step 3 the plugin stays in the Development menu.
+
+## Windows setup (scripts here do not run on Windows)
+
+1. Download `figma-mcp-windows-amd64.exe` and `figma-plugin.zip` from https://github.com/chuxu1793-cloud/figma-mcp/releases/latest into a folder such as `%USERPROFILE%\figma`, renaming the binary to `figma-mcp.exe`.
+2. Extract `figma-plugin.zip` in that folder — it contains a top-level `plugin\` directory.
+3. Add the MCP entry manually using the shapes below, with a double-escaped path, e.g. `"command": "C:\\Users\\you\\figma\\figma-mcp.exe"`.
+4. Import `plugin\manifest.json` in the Figma Desktop app as described above.
+
+Verification without the scripts: `curl http://127.0.0.1:1994/ping` while an MCP client session is running.
 
 ## Environment variables
 

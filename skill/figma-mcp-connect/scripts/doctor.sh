@@ -53,7 +53,9 @@ for f in "$HOME/.codely-cli/settings.json" \
          "$HOME/.config/Claude/claude_desktop_config.json" \
          "$HOME/.cursor/mcp.json" \
          "$PWD/.mcp.json" "$PWD/.cursor/mcp.json" "$PWD/.vscode/mcp.json"; do
-  [ -f "$f" ] && grep -q "figma-mcp" "$f" 2>/dev/null && FOUND+=("$f")
+  # Match a command ending in figma-mcp only, so unrelated servers such as
+  # "@scope/figma-mcp-go" are not miscounted as this binary.
+  [ -f "$f" ] && grep -Eq '"[^"]*figma-mcp(\.exe)?"' "$f" 2>/dev/null && FOUND+=("$f")
 done
 if [ ${#FOUND[@]} -gt 0 ]; then
   echo "REGISTERED_IN: ${FOUND[*]}"

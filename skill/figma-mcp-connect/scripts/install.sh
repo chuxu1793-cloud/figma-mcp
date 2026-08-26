@@ -19,6 +19,13 @@ done
 
 fail() { echo "STATUS: error"; echo "REASON: $1"; exit 1; }
 
+# Guard: the plugin directory is deleted before reinstall, so refuse paths where
+# that would be destructive.
+DIR="${DIR%/}"
+case "$DIR" in
+  ""|"/"|"$HOME") fail "refusing to install directly into '${DIR:-/}'; pass a dedicated --dir such as \$HOME/figma" ;;
+esac
+
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 case "$OS-$ARCH" in
@@ -48,8 +55,10 @@ trap 'rm -rf "$TMP"' EXIT
 # Expected checksum of the release asset, used both for verification and to
 # decide whether the local binary is already up to date.
 WANT=""
+WANT_ZIP=""
 if [ -n "$SHA" ] && curl -fsSL --max-time 30 -o "$TMP/SHA256SUMS.txt" "$BASE/SHA256SUMS.txt"; then
   WANT=$(awk -v a="$ASSET" '$2 == a || $2 == "*"a {print $1}' "$TMP/SHA256SUMS.txt" | head -1)
+  WANT_ZIP=$(awk '$2 == "figma-plugin.zip" || $2 == "*figma-plugin.zip" {print $1}' "$TMP/SHA256SUMS.txt" | head -1)
 fi
 
 HAVE=""
@@ -72,6 +81,10 @@ else
   fi
 
   curl -fsSL --max-time 300 -o "$TMP/figma-plugin.zip" "$BASE/figma-plugin.zip" || fail "download failed: $BASE/figma-plugin.zip"
+  if [ -n "$WANT_ZIP" ]; then
+    GOT_ZIP=$($SHA "$TMP/figma-plugin.zip" | awk '{print $1}')
+    [ "$GOT_ZIP" = "$WANT_ZIP" ] || fail "checksum mismatch for figma-plugin.zip (expected $WANT_ZIP, got $GOT_ZIP)"
+  fi
 
   install -m 755 "$TMP/$ASSET" "$BIN" || fail "cannot write $BIN"
   rm -rf "$DIR/plugin"

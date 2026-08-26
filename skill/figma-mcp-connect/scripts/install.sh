@@ -122,5 +122,6 @@ fi
 
 echo "BINARY: $BIN"
 echo "MANIFEST: $MANIFEST"
-echo "PLATFORM: $ASSET"
+echo "PLATFORM: $OS"
+echo "ASSET: $ASSET"
 echo "SOURCE: $BASE"

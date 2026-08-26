@@ -29,19 +29,22 @@ NEXT=()
 echo "PLATFORM: $OS"
 
 # --- binary + plugin ---------------------------------------------------------
+NEED_INSTALL=0
 if [ -x "$BIN" ]; then
   echo "BINARY: $BIN"
 else
   echo "BINARY: missing ($BIN)"
-  NEXT+=("run scripts/install.sh")
+  NEED_INSTALL=1
 fi
 
 if [ -f "$MANIFEST" ]; then
   echo "MANIFEST: $MANIFEST"
 else
   echo "MANIFEST: missing ($MANIFEST)"
-  NEXT+=("run scripts/install.sh")
+  NEED_INSTALL=1
 fi
+
+[ "$NEED_INSTALL" -eq 1 ] && NEXT+=("run this skill's scripts/install.sh --dir \"$DIR\"")
 
 if [ "$OS" = "darwin" ] && [ -f "$BIN" ]; then
   if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then
@@ -68,7 +71,7 @@ if [ ${#FOUND[@]} -gt 0 ]; then
   echo "REGISTERED_IN: ${FOUND[*]}"
 else
   echo "REGISTERED_IN: none found"
-  NEXT+=("run scripts/register_client.cjs --client <id> --binary \"$BIN\"")
+  NEXT+=("run this skill's scripts/register_client.cjs --client <id> --binary \"$BIN\"")
 fi
 
 # --- Figma desktop app -------------------------------------------------------
@@ -131,6 +134,11 @@ else
   NEXT+=("re-run with --test to probe the bridge without an MCP client")
 fi
 
-for n in "${NEXT[@]}"; do echo "NEXT: $n"; done
-[ ${#NEXT[@]} -eq 0 ] && echo "NEXT: none — setup looks complete"
+# Guarded: bash 3.2 (macOS system bash) treats "${arr[@]}" on an empty array as
+# an unbound variable under `set -u`.
+if [ ${#NEXT[@]} -gt 0 ]; then
+  for n in "${NEXT[@]}"; do echo "NEXT: $n"; done
+else
+  echo "NEXT: none — setup looks complete"
+fi
 exit 0

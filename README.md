@@ -14,7 +14,7 @@ Figma MCP server written in Rust, with full read/write access via plugin — no 
 **Highlights**
 - No Figma API token required
 - No rate limits — free plan friendly
-- **Read and Write** live Figma data via plugin bridge — 83 tools total
+- **Read and Write** live Figma data via plugin bridge — 92 tools total
 - Full design automation — styles, variables, components, prototypes, and content
 - Design strategies included — 14 prompts built in
 - Written in Rust — fast, memory-safe, single binary
@@ -120,7 +120,7 @@ claude mcp add -s project figma -- ~/figma/figma-mcp
 
 ---
 
-## Available Tools (83 total)
+## Available Tools (92 total)
 
 ### Read Tools (17)
 
@@ -130,21 +130,33 @@ claude mcp add -s project figma -- ~/figma/figma-mcp
 | Nodes | `get_nodes_info`, `get_design_context`, `search_nodes`, `scan_nodes_by_types` |
 | Styles | `get_styles`, `get_variable_defs`, `get_local_components`, `get_annotations`, `get_fonts` |
 | Prototype | `get_reactions` |
-| Export | `get_screenshot`, `export_frames_to_pdf`, `export_tokens` |
+| Export | `get_screenshot`, `export_tokens` |
 | Data | `get_plugin_data` |
 
-### Write Tools (66)
+### Write Tools (75)
 
 | Category | Tools |
 |----------|-------|
-| Create | `create_frame`, `create_rectangle`, `create_ellipse`, `create_text`, `import_image`, `create_component`, `create_section`, `create_line`, `create_star`, `create_polygon`, `batch_create_nodes` |
-| Modify | `set_text`, `set_text_properties`, `set_fills`, `set_strokes`, `set_gradient_fill`, `move_nodes`, `resize_nodes`, `rename_node`, `clone_node`, `set_opacity`, `set_corner_radius`, `set_auto_layout`, `delete_nodes`, `set_visible`, `set_locked`, `rotate_nodes`, `reorder_nodes`, `set_blend_mode`, `set_constraints`, `reparent_nodes`, `batch_rename_nodes`, `find_replace_text`, `set_viewport`, `set_plugin_data`, `set_text_range` |
+| Create | `create_frame`, `create_rectangle`, `create_ellipse`, `create_text`, `import_image`, `create_component`, `create_section`, `create_line`, `create_star`, `create_polygon`, `create_node_from_svg`, `create_vector`, `outline_stroke`, `batch_create_nodes` |
+| Modify | `set_text`, `set_text_properties`, `set_fills`, `set_strokes`, `set_gradient_fill`, `move_nodes`, `resize_nodes`, `rename_node`, `clone_node`, `set_opacity`, `set_corner_radius`, `set_auto_layout`, `delete_nodes`, `set_visible`, `set_locked`, `rotate_nodes`, `reorder_nodes`, `set_blend_mode`, `set_constraints`, `set_layer_behavior`, `reparent_nodes`, `batch_rename_nodes`, `find_replace_text`, `set_viewport`, `set_plugin_data`, `set_text_range` |
 | Styles | `create_paint_style`, `create_text_style`, `create_effect_style`, `create_grid_style`, `update_paint_style`, `update_text_style`, `update_effect_style`, `update_grid_style`, `delete_style`, `apply_style_to_node`, `set_effects`, `bind_variable_to_node` |
 | Variables | `create_variable_collection`, `add_variable_mode`, `create_variable`, `set_variable_value`, `delete_variable` |
-| Components | `group_nodes`, `ungroup_nodes`, `swap_component`, `detach_instance`, `set_component_property` |
+| Components | `group_nodes`, `boolean_operation`, `flatten_nodes`, `ungroup_nodes`, `create_instance`, `set_instance_properties`, `swap_component`, `detach_instance`, `set_component_property` |
 | Prototype | `set_reactions`, `remove_reactions` |
-| Pages | `navigate_to_page`, `add_page`, `delete_page`, `rename_page` |
+| Pages | `navigate_to_page`, `add_page`, `delete_page`, `rename_page`, `set_selection` |
 | Export | `export_frames_to_pdf`, `export_nodes` |
+
+### What the tool names don't tell you
+
+The tools above are deeper than their names suggest. The highlights worth knowing:
+
+- **Paints are a first-class array.** `set_fills`, `set_strokes`, `create_paint_style` and `update_paint_style` all accept a `paints` array of stackable paints — `SOLID`, all four gradient types (`GRADIENT_LINEAR`, `GRADIENT_RADIAL`, `GRADIENT_ANGULAR`, `GRADIENT_DIAMOND`) and `IMAGE`, each with its own `opacity`, `visible` and `blendMode`. Image paints take `imageData`/`imageUrl`/`imageHash`, `scaleMode`, `imageTransform` (crop), `scalingFactor` (tile), `rotation`, and the paint-picker `filters` (exposure, contrast, saturation, temperature, tint, highlights, shadows). Use `mode: "append"` to stack onto existing paints instead of replacing them.
+- **Gradients without matrix math.** `set_gradient_fill` (and any gradient paint) accepts `direction` — `TO_RIGHT`, `TO_BOTTOM`, `TO_BOTTOM_RIGHT`, … — or `angle` in degrees. Precedence is `gradientTransform` > `angle` > `direction`, so you only hand-write a 2x3 matrix when you actually need an exact one.
+- **Modern auto layout.** `set_auto_layout` covers both sides of the flex relationship: parent-side (`layoutMode`, padding, `itemSpacing`, primary/counter axis align and sizing, `layoutWrap`, `counterAxisSpacing`, `itemReverseZIndex`, `strokesIncludedInLayout`) and child-side (`layoutSizingHorizontal`/`layoutSizingVertical` as FIXED/HUG/FILL, `layoutGrow`, `layoutAlign`, `layoutPositioning`), plus `minWidth`/`maxWidth`/`minHeight`/`maxHeight`.
+- **Full stroke control.** Beyond colour and `strokeWeight`: `strokeAlign`, `strokeCap`, `strokeJoin`, `strokeMiterLimit`, `dashPattern`, and per-side `strokeTopWeight`/`Right`/`Bottom`/`LeftWeight`.
+- **Effects beyond shadows.** `set_effects` handles `DROP_SHADOW` (incl. `showShadowBehindNode`), `INNER_SHADOW`, `LAYER_BLUR` / `BACKGROUND_BLUR` with `blurType: "PROGRESSIVE"` (`startRadius`, `startOffset`, `endOffset`), and the newer `GLASS` (light intensity/angle, refraction, depth, dispersion), `NOISE` (mono/duo/multitone, grain size, density) and `TEXTURE` effects.
+- **Typography, not just font size.** `set_text_properties` adds `textAutoResize`, `paragraphSpacing`, `paragraphIndent`, `textTruncation` and `maxLines` on top of the usual font/line-height/letter-spacing/case/alignment set. `set_text_range` formats a character range and supports `listOptions` (ordered/unordered), `indentation` and `hyperlink`.
+- **To draw an icon, write SVG.** `create_node_from_svg` is the recommended path for any arbitrary shape: Figma's own importer handles arcs, multiple subpaths, `fill-rule`, per-path fills/strokes and transforms, then `flatten_nodes` merges the result if you want one VECTOR. `create_vector` is for path data you already have — it only accepts absolute `M`/`L`/`Q`/`C`/`Z`, so no arcs, relative or shorthand commands.
 
 ### MCP Prompts (14)
 

@@ -21,6 +21,7 @@ done
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$OS" in mingw*|msys*|cygwin*) OS="windows" ;; esac
 EXE=""; [ "$OS" = "windows" ] && EXE=".exe"
+SELF_DIR=$(cd "$(dirname "$0")" && pwd)
 
 DIR="${DIR%/}"
 BIN="$DIR/figma-mcp$EXE"
@@ -93,6 +94,19 @@ case "$OS" in
     ;;
 esac
 
+# --- running server processes, stale ones first ------------------------------
+# Detection lives in cleanup.sh (dry run changes nothing); only its per-process
+# lines are surfaced here. Runs before --test so the temporary probe server
+# started below is never mistaken for a leftover.
+if [ -x "$SELF_DIR/cleanup.sh" ]; then
+  SCAN=$(bash "$SELF_DIR/cleanup.sh" --dir "$DIR" --port "$PORT" 2>/dev/null)
+  echo "$SCAN" | grep -E '^(PROC|FOUND):' || true
+  STALE_N=$(echo "$SCAN" | sed -n 's/^FOUND: [0-9]* process(es), \([0-9]*\) stale$/\1/p')
+  if [ -n "${STALE_N:-}" ] && [ "$STALE_N" -gt 0 ]; then
+    NEXT+=("run this skill's scripts/cleanup.sh --dir \"$DIR\" --port $PORT --apply to drop $STALE_N stale process(es) holding the port with an outdated binary")
+  fi
+fi
+
 # --- leader + bridge ---------------------------------------------------------
 probe() {
   local ping_json bridge_json
@@ -103,7 +117,7 @@ probe() {
   case "$bridge_json" in
     *'"error":"plugin not connected"'*)
       echo "BRIDGE: plugin not connected"
-      NEXT+=("open the Figma MCP plugin inside a Figma file (Plugins - Development - Figma MCP); it auto-connects and retries every 1.5s")
+      NEXT+=("open the Figma MCP plugin inside a Figma file (Plugins > Development > Figma MCP); it auto-connects and retries every 1.5s")
       ;;
     *'"data"'*) echo "BRIDGE: connected ${bridge_json:0:200}" ;;
     *)          echo "BRIDGE: unexpected response ${bridge_json:0:200}" ;;

@@ -73,12 +73,14 @@ shasum -a 256 -c SHA256SUMS.txt --ignore-missing
 Install the bundled skill and let the agent handle download, config registration, and verification:
 
 ```bash
-curl -L -O https://raw.githubusercontent.com/chuxu1793-cloud/figma-mcp/main/skill/figma-mcp-connect.skill
-codely skills install figma-mcp-connect.skill --scope user
+curl -L -O https://raw.githubusercontent.com/chuxu1793-cloud/figma-mcp/main/skill/figma-mcp.skill
+codely skills install figma-mcp.skill --scope user
 # then in Codely CLI: /skills reload
 ```
 
-Afterwards just say "安装 figma-mcp" / "figma mcp 连不上" and the agent runs the install, registers the MCP entry for your client, and probes the plugin bridge. Sources live in [`skill/figma-mcp-connect/`](skill/figma-mcp-connect).
+Afterwards just say "安装 figma-mcp" / "figma mcp 连不上" and the agent runs the install, registers the MCP entry for your client, and probes the plugin bridge. Sources live in [`skill/figma-mcp/`](skill/figma-mcp).
+
+Note: this path needs the Figma **desktop app** — the plugin bridge does not work in a browser, and Linux has no desktop app, so on Linux the server installs but the bridge cannot connect. Node.js is required for config registration, and Windows users need Git Bash or WSL.
 
 ### 2. Configure your AI tool
 

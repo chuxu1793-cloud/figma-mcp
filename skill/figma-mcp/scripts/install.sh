@@ -125,3 +125,15 @@ echo "MANIFEST: $MANIFEST"
 echo "PLATFORM: $OS"
 echo "ASSET: $ASSET"
 echo "SOURCE: $BASE"
+
+# Writing the binary does not stop servers already running: they keep the old
+# image and the port, so tool calls would still be served by the old version.
+SELF_DIR=$(cd "$(dirname "$0")" && pwd)
+if [ -x "$SELF_DIR/cleanup.sh" ]; then
+  STALE_N=$(bash "$SELF_DIR/cleanup.sh" --dir "$DIR" 2>/dev/null |
+    sed -n 's/^FOUND: [0-9]* process(es), \([0-9]*\) stale$/\1/p')
+  if [ -n "${STALE_N:-}" ] && [ "$STALE_N" -gt 0 ]; then
+    echo "STALE: $STALE_N running process(es) still use an outdated binary image"
+    echo "NEXT: run this skill's scripts/cleanup.sh --dir \"$DIR\" --apply"
+  fi
+fi

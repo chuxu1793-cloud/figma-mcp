@@ -26,7 +26,7 @@ Automate everything that can be automated. Probe the bridge with `doctor.sh --te
 | Launch Figma | `open -a Figma` | Start menu — no reliable CLI hook; do not invent one | **no official Figma Desktop app** → plugin bridge unavailable |
 | Reveal plugin folder | `open <dir>/plugin` | `explorer.exe <dir>\plugin` (Git Bash) or `explorer <dir>\plugin` (cmd/PowerShell) | `xdg-open <dir>/plugin` |
 
-Determine the OS from the environment context or `uname -s` before emitting any command. On Linux, install and register normally, but state up front that importing the plugin requires the Figma Desktop app, which Figma does not ship for Linux — the server will run without a bridge. If Windows has no Git Bash or WSL, follow the manual sequence in `references/troubleshooting.md` instead of inventing shell commands.
+Determine the OS from the environment context or `uname -s` before emitting any command. On Linux, install and register normally, but state the plugin-bridge limitation up front — see the Linux section in `references/troubleshooting.md` for the details and workarounds. If Windows has no Git Bash or WSL, follow the manual sequence in `references/troubleshooting.md` instead of inventing shell commands.
 
 ## Workflow
 
@@ -119,7 +119,7 @@ Close by reporting the binary path, manifest path, config file touched, and the 
 
 - Never claim the bridge, tools, or install work without the corresponding script line as evidence. Unverified steps must be reported as unverified.
 - Never invoke the binary directly in the foreground — its stdio transport blocks forever. Use `doctor.sh --test`, which holds stdin through a FIFO and cleans up.
-- Never kill figma-mcp processes with ad-hoc `pkill`/`killall`/`taskkill`: matching on the string `figma-mcp` also hits this skill's own scripts and unrelated servers such as `figma-mcp-go`, and killing the leader alone just promotes a stale follower. Use `cleanup.sh`.
+- Never kill figma-mcp processes with ad-hoc `pkill`/`killall`/`taskkill`: matching on the string `figma-mcp` also hits this skill's own scripts and unrelated servers such as `figma-mcp-go`. Use `cleanup.sh`.
 - Never report a stale process as cleaned without the script's `STATUS: cleaned` plus the `PORT:` line.
 - Never hand-edit MCP configs when `register_client.cjs` can do it; it creates `.bak` backups.
 - Use absolute paths in MCP configs; clients do not expand `~`.

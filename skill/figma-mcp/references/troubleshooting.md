@@ -13,36 +13,19 @@ Contents: architecture detail · stale processes · symptom table · plugin impo
 
 ### Why they accumulate
 
-The process has exactly two exit paths: stdin EOF (the MCP client closes the pipe) and SIGINT. There is no idle timeout, no heartbeat-based self-eviction, and the election monitor only ever *promotes* — it never asks an existing leader to step down. Consequences:
+The two exit paths (stdin EOF, SIGINT) and the lack of an idle timeout are stated in SKILL.md's facts; the details that summary does not spell out:
 
-- A client that is SIGKILLed, or a terminal window force-closed, can leave the child with an open stdin. A client session simply left open for days keeps its server alive just as long.
-- `install.sh` writes a new file; a running process keeps executing the image it started with (macOS shows the old image under `~/.Trash/...` after the file was replaced). The stale leader keeps the port, a freshly spawned server becomes a follower, and **every tool call is proxied into the old code** — new tools appear missing, fixed bugs come back.
-- `GET /ping` reports that old process's version, so a version older than the release you just installed is the cheapest skew signal.
-- Killing only the leader promotes a stale follower within 3–5s. The whole stale set has to go at once — which is why `cleanup.sh` signals all targets before waiting.
+- The election monitor only ever *promotes* — it never asks an existing leader to step down, so after an upgrade nothing ever frees the port on its own.
+- A freshly spawned server becomes a follower of the stale leader, and **every tool call is proxied into the old code** — new tools appear missing, fixed bugs come back.
+- `GET /ping` reports the old process's version, so a version older than the release just installed is the cheapest skew signal.
 
 ### Detect
 
-`doctor.sh` surfaces this automatically (`PROC:` / `FOUND:` lines, plus a `NEXT:` pointing at `cleanup.sh`). Manual equivalents:
-
-| | macOS | Linux | Windows |
-|---|---|---|---|
-| Who owns the port | `lsof -nP -iTCP:1994 -sTCP:LISTEN` | `ss -lptn 'sport = :1994'` | `netstat -ano \| findstr :1994` |
-| Parent + age | `ps -o pid,ppid,lstart,etime,args -p <pid>` | same | `tasklist /FI "PID eq <pid>"` |
-| Which image it runs | `lsof -p <pid> \| awk '$4=="txt"{print $NF; exit}'` | `readlink /proc/<pid>/exe` | not available |
-| Version being served | `curl -s http://127.0.0.1:1994/ping` | same | same |
-
-Stale indicators: `ppid` is 1 (orphan), image path under `.Trash` or suffixed ` (deleted)`, image inode different from the installed binary, image outside the install dir, or a `/ping` version behind the installed release.
+`doctor.sh` surfaces this automatically — `PROC:` / `FOUND:` lines plus a `NEXT:` pointing at `cleanup.sh`; the stale classifications printed on `PROC:` lines are defined in SKILL.md step 3. Detection is script-only: if the scripts themselves cannot run, report that as the failure instead of improvising manual process commands.
 
 ### Clean up
 
-```bash
-bash SKILL_DIR/scripts/cleanup.sh --dir ~/figma            # report only
-bash SKILL_DIR/scripts/cleanup.sh --dir ~/figma --apply    # SIGINT -> SIGTERM -> SIGKILL
-```
-
-SIGINT is the handled path (stops the election monitor and closes the WebSocket); SIGTERM/SIGKILL are unhandled fallbacks that terminate immediately — nothing is persisted, so there is no state to corrupt. The Figma plugin reconnects by itself within ~1.5s. `--all` also stops healthy processes; the client sessions owning them must be restarted.
-
-Do not use `pkill -f figma-mcp` / `killall`: the pattern also matches this skill's scripts and unrelated servers such as `@scope/figma-mcp-go`.
+Commands and kill semantics are SKILL.md step 3: dry run first, read the `PROC:` lines aloud, then `--apply`. One detail SKILL.md does not spell out: SIGTERM and SIGKILL are unhandled fallbacks that terminate immediately — nothing is persisted, so there is no state to corrupt.
 
 ### Prevent
 
@@ -68,7 +51,7 @@ Do not use `pkill -f figma-mcp` / `killall`: the pattern also matches this skill
 | Plugin missing from Figma's menu | Manifest not imported, or imported from a deleted path | Re-import `<dir>/plugin/manifest.json`; keep the directory in place |
 | Import option greyed out / absent | Using Figma in a browser | Development plugins require the Figma **Desktop** app |
 | `--version` fails with "unexpected argument" | Flag does not exist | Read the version from `GET /ping`, or compare the binary's sha256 against `SHA256SUMS.txt` |
-| Linux arm64 has no asset | Only darwin-arm64, darwin-amd64, linux-amd64, windows-amd64 are built | Build from source, or run the amd64 build under emulation |
+| Linux arm64 has no asset | Only darwin-arm64, darwin-amd64, linux-amd64, windows-amd64 are built | Run the amd64 build under emulation |
 
 ## Figma plugin import (GUI only — cannot be scripted)
 
@@ -112,7 +95,9 @@ Binary and registration work normally (`figma-mcp-linux-amd64`; no arm64 asset).
 |---|---|---|
 | `FIGMA_MCP_TIMEOUT` | 30 | Bridge timeout in seconds for all tools except `get_design_context` |
 | `FIGMA_MCP_TIMEOUT_DESIGN_CONTEXT` | 60 | Bridge timeout for `get_design_context` |
-| `FIGMA_MCP_ELECTION_JITTER_MIN` / `_MAX` | 3000 / 5000 | Leader health-check interval in ms |
+| `FIGMA_MCP_FOLLOWER_TIMEOUT` | 65 | Follower → leader HTTP timeout in seconds (must exceed the max bridge timeout of 60s) |
+| `FIGMA_MCP_TAKEOVER_FAILURES` | 2 | Consecutive failed leader pings before a follower attempts a takeover |
+| `FIGMA_MCP_ELECTION_JITTER_MIN` / `_MAX` | 3000 / 5000 | Election monitor jitter in ms — random delay added to each leader health-check cycle |
 | `RUST_LOG` | `figma_mcp=info` | Log filter; logs go to stderr |
 
 Pass them via the MCP client's `env` block, e.g. `"env": { "FIGMA_MCP_TIMEOUT": "60" }`.

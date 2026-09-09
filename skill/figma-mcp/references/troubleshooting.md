@@ -51,6 +51,7 @@ Commands and kill semantics are SKILL.md step 3: dry run first, read the `PROC:`
 | Plugin missing from Figma's menu | Manifest not imported, or imported from a deleted path | Re-import `<dir>/plugin/manifest.json`; keep the directory in place |
 | Import option greyed out / absent | Using Figma in a browser | Development plugins require the Figma **Desktop** app |
 | `--version` fails with "unexpected argument" | Flag does not exist | Read the version from `GET /ping`, or compare the binary's sha256 against `SHA256SUMS.txt` |
+| Need a release newer than the bundled one | The skill ships the release current at packaging time | `install.sh --version <tag>` downloads it from GitHub (online); re-bundling the skill updates the default |
 | Linux arm64 has no asset | Only darwin-arm64, darwin-amd64, linux-amd64, windows-amd64 are built | Run the amd64 build under emulation |
 
 ## Figma plugin import (GUI only — cannot be scripted)
@@ -69,7 +70,7 @@ When guiding a user live, follow SKILL.md step 5: work step by step with announc
 
 ## Windows without Git Bash or WSL
 
-`install.sh` and `doctor.sh` need a POSIX shell. With Git Bash or WSL they work as-is (the `.exe` asset is selected automatically). Without one, do this in PowerShell:
+`install.sh` and `doctor.sh` need a POSIX shell. With Git Bash or WSL they work as-is (the `.exe` asset is selected automatically). Without one: if this machine already has the skill unpacked (for example via `codely skills install`), copy `figma-mcp-windows-amd64.exe` and `figma-plugin.zip` from the skill's `bin\` directory instead of downloading, verifying against the bundled `SHA256SUMS.txt`. Otherwise do this in PowerShell:
 
 ```powershell
 $dir = "$env:USERPROFILE\figma"; New-Item -ItemType Directory -Force $dir | Out-Null
@@ -87,7 +88,7 @@ Verification without the scripts: `curl http://127.0.0.1:1994/ping` while an MCP
 
 ## Linux
 
-Binary and registration work normally (`figma-mcp-linux-amd64`; no arm64 asset). Figma ships no official Linux desktop app, and development plugins cannot be imported in a browser tab — so the plugin bridge cannot be established with official software. Options: run the client/plugin on a macOS or Windows machine and point the plugin at that host's port, or use an unofficial Figma Linux build (untested here).
+Binary and registration work normally (`figma-mcp-linux-amd64`, bundled in the skill's `bin/`; no arm64 asset). Figma ships no official Linux desktop app, and development plugins cannot be imported in a browser tab — so the plugin bridge cannot be established with official software. Options: run the client/plugin on a macOS or Windows machine and point the plugin at that host's port, or use an unofficial Figma Linux build (untested here).
 
 ## Environment variables
 

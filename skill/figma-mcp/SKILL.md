@@ -11,7 +11,7 @@ Automate everything that can be automated. Probe the bridge with `doctor.sh --te
 
 ## Facts that drive the workflow
 
-- Distribution: prebuilt binaries from GitHub releases of `chuxu1793-cloud/figma-mcp`. No source build, no npm package, no Figma API token. Prebuilt targets: darwin-arm64, darwin-amd64, linux-amd64, windows-amd64.
+- Distribution: prebuilt binaries only — no source build, no npm package, no Figma API token. The skill bundles every target (darwin-arm64, darwin-amd64, linux-amd64, windows-amd64) plus `figma-plugin.zip`, `SHA256SUMS.txt`, and `VERSION` in `bin/`; `install.sh` installs from there fully offline by default. `--version <tag>` downloads from GitHub releases of `chuxu1793-cloud/figma-mcp` instead — use it for releases newer than the bundled one.
 - The binary is an MCP **stdio** server — the MCP client spawns it on demand. Never "start it as a service"; nothing listening between sessions is normal.
 - Each process also serves `127.0.0.1:1994` (`GET /ping`, `POST /rpc`, `GET /ws`) and elects a leader by binding the port.
 - A process exits only on stdin EOF or SIGINT — no idle timeout, no self-eviction. So a server outlives a force-quit client or a session left open for days, keeps the port and the plugin WebSocket, and keeps executing its **original** binary image after an upgrade. Every tool call then runs old code. Treat stale processes as a routine check, not an exotic failure.
@@ -46,9 +46,9 @@ Act only on the `NEXT:` lines it prints. Skip to step 5 if nothing else is missi
 bash SKILL_DIR/scripts/install.sh [--dir ~/figma] [--version <tag>] [--force]
 ```
 
-Idempotent: verifies sha256 of binary and plugin zip against the release `SHA256SUMS.txt`, reports `already-current` when the local binary matches, strips the macOS quarantine attribute, unpacks the plugin to `<dir>/plugin/`. `--force` reinstalls or downgrades.
+Idempotent: installs the **bundled** binary from `SKILL_DIR/bin/` with no network access, verifies sha256 of binary and plugin zip against the bundled `SHA256SUMS.txt`, reports `already-current` when the local binary matches, strips the macOS quarantine attribute, unpacks the plugin to `<dir>/plugin/`. `--force` reinstalls or downgrades. Without a bundled asset for the current platform it falls back to the GitHub release (online).
 
-Omit `--version` (defaults to the latest release) unless the user names a tag. Do not invent tags or version numbers, and do not state a version unless a script or `GET /ping` reported it — the binary has no `--version` flag.
+Omit `--version` (defaults to the bundled release) unless the user names a tag; `--version <tag>` or `--version latest` downloads that release from GitHub. Do not invent tags or version numbers, and do not state a version unless a script or `GET /ping` reported it — the binary has no `--version` flag.
 
 ### 3. Clear stale processes (whenever `doctor.sh`/`install.sh` reports any)
 

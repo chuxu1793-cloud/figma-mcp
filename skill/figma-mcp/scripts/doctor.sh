@@ -1,15 +1,17 @@
 #!/bin/bash
 # Reports figma-mcp setup state and what is still missing.
-# Usage: doctor.sh [--port 1994] [--test]
+# Usage: doctor.sh [--plugin-dir ~/figma] [--port 1994] [--test]
 #   --test  temporarily starts the binary itself to probe the plugin bridge
 #           (only when nothing is listening on the port)
 set -uo pipefail
 
+PLUGIN_DIR="$HOME/figma"
 PORT=1994
 TEST=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --plugin-dir) PLUGIN_DIR="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --test) TEST=1; shift ;;
     *) echo "REASON: unknown argument $1"; exit 2 ;;
@@ -29,7 +31,8 @@ case "$OS-$ARCH" in
   *)              ASSET="figma-mcp" ;;
 esac
 BIN="$SKILL_DIR/bin/$ASSET"
-MANIFEST="$SKILL_DIR/plugin/manifest.json"
+PLUGIN_DIR="${PLUGIN_DIR%/}"
+MANIFEST="$PLUGIN_DIR/plugin/manifest.json"
 NEXT=()
 echo "PLATFORM: $OS"
 
@@ -49,7 +52,7 @@ else
   NEED_INSTALL=1
 fi
 
-[ "$NEED_INSTALL" -eq 1 ] && NEXT+=("run this skill's scripts/install.sh")
+[ "$NEED_INSTALL" -eq 1 ] && NEXT+=("run this skill's scripts/install.sh --plugin-dir \"$PLUGIN_DIR\"")
 
 if [ "$OS" = "darwin" ] && [ -f "$BIN" ]; then
   if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then

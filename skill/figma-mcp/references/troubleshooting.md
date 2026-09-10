@@ -48,7 +48,7 @@ Commands and kill semantics are SKILL.md step 3: dry run first, read the `PROC:`
 | `/ping` version older than the release just installed; new tools missing after upgrade | A pre-upgrade process still owns the port and serves the old image | `cleanup.sh --apply` (see above), then re-verify with `doctor.sh --test` |
 | `doctor.sh --test` never starts a temporary server | Port already held, often by an orphaned process | Identify with `cleanup.sh`, clear it, re-run `--test` |
 | Bridge dies for every client at once, long after the Figma side looked fine | Stale leader was killed by the OS or lost its plugin socket; followers proxy into it | `cleanup.sh --apply`, reopen the plugin window |
-| Plugin missing from Figma's menu | Manifest not imported, or imported from a deleted path | Re-import `SKILL_DIR/plugin/manifest.json`; keep the skill folder in place |
+| Plugin missing from Figma's menu | Manifest not imported, or imported from a deleted path | Re-import `<plugin-dir>/plugin/manifest.json` (default `~/figma/plugin/`); keep the deployed folder in place |
 | Import option greyed out / absent | Using Figma in a browser | Development plugins require the Figma **Desktop** app |
 | `--version` fails with "unexpected argument" | Flag does not exist | Read the version from `GET /ping`, or compare the binary's sha256 against `SHA256SUMS.txt` |
 | Need a release newer than the bundled one | The skill ships the release current at packaging time | `install.sh --version <tag>` installs it from GitHub into `SKILL_DIR/bin/` in place (online); re-bundling the skill updates the default |
@@ -60,30 +60,31 @@ Prerequisites: Figma **Desktop** app only (a browser tab will not work), and any
 
 1. Open the **Figma Desktop** app (`open -a Figma` on macOS).
 2. Menu: **Plugins > Development > Import plugin from manifest…**
-3. Select `SKILL_DIR/plugin/manifest.json`.
+3. Select `<plugin-dir>/plugin/manifest.json` (default `~/figma/plugin/manifest.json` — the `MANIFEST:` path `install.sh` printed).
 4. In any open file, run **Plugins > Development > Figma MCP**.
 5. The plugin window must stay open — closing it drops the WebSocket. It reconnects on its own when reopened.
 
-Reaching a hidden `SKILL_DIR` in the file picker (a `~/.codely-cli/skills/…` install copy, or `%APPDATA%\…` on Windows): on macOS press `Cmd+Shift+G` and paste the full manifest path — no need to reveal hidden folders — or press `Cmd+Shift+.` to show them (works in Finder too); on Windows paste the path into the file name box.
+Reaching a hidden or awkward `<plugin-dir>` in the file picker: on macOS press `Cmd+Shift+G` and paste the full manifest path — no need to reveal hidden folders — or press `Cmd+Shift+.` to show them (works in Finder too); on Windows paste the path into the file name box.
 
-One-time only: after step 3 the plugin stays in the Development menu. The skill folder must stay in place afterwards — the imported plugin and the registered MCP command both live inside it.
+One-time only: after step 3 the plugin stays in the Development menu. Two paths must stay in place afterwards: the deployed plugin directory (the import points at it) and the skill folder (the MCP command points into its `bin/`).
 
 When guiding a user live, follow SKILL.md step 5: work step by step with announce → ask — state the operation in a text message first, then ask about the result with the `ask_user` dialog. Verify with `doctor.sh --test`. The question text must restate the operation and its expected outcome so the user never answers blind.
 
 ## Windows without Git Bash or WSL
 
-`install.sh` and `doctor.sh` need a POSIX shell. With Git Bash or WSL they work as-is (the `.exe` asset is selected automatically). Without one, do the same steps by hand in PowerShell — everything stays inside the skill folder (replace `$skill` with the skill folder's absolute path):
+`install.sh` and `doctor.sh` need a POSIX shell. With Git Bash or WSL they work as-is (the `.exe` asset is selected automatically). Without one, do the same steps by hand in PowerShell — the server binary stays inside the skill folder, the plugin deploys out of it (replace `$skill` with the skill folder's absolute path; `$plugdir` is the plugin destination, default `$env:USERPROFILE\figma`):
 
 ```powershell
 $skill = "$env:USERPROFILE\.codely-cli\skills\figma-mcp"   # example path — use the real skill folder
-Expand-Archive -Force "$skill\bin\figma-plugin.zip" "$skill"          # creates $skill\plugin\
+$plugdir = "$env:USERPROFILE\figma"                        # default plugin destination — user-choosable
+Expand-Archive -Force "$skill\bin\figma-plugin.zip" "$plugdir"        # creates $plugdir\plugin\
 Unblock-File "$skill\bin\figma-mcp-windows-amd64.exe"                 # strips the downloaded-file mark
 (Get-FileHash "$skill\bin\figma-mcp-windows-amd64.exe" -Algorithm SHA256).Hash.ToLower()   # compare with bin\SHA256SUMS.txt
 ```
 
 If `bin\figma-mcp-windows-amd64.exe` is missing from the bundle, download the release into `bin\` first: set `$base = "https://github.com/chuxu1793-cloud/figma-mcp/releases/latest/download"` and run `Invoke-WebRequest "$base/figma-mcp-windows-amd64.exe" -OutFile "$skill\bin\figma-mcp-windows-amd64.exe"`.
 
-Then register manually with a double-escaped path pointing into the skill folder — `"command": "C:\\Users\\you\\.codely-cli\\skills\\figma-mcp\\bin\\figma-mcp-windows-amd64.exe"` — using the shapes below, and import `plugin\manifest.json` in Figma Desktop.
+Then register manually with a double-escaped path pointing into the skill folder — `"command": "C:\\Users\\you\\.codely-cli\\skills\\figma-mcp\\bin\\figma-mcp-windows-amd64.exe"` — using the shapes below, and import `$plugdir\plugin\manifest.json` in Figma Desktop.
 
 Verification without the scripts: `curl http://127.0.0.1:1994/ping` while an MCP client session is running.
 

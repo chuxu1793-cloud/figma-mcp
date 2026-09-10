@@ -11,9 +11,9 @@ Automate everything that can be automated. Probe the bridge with `doctor.sh --te
 
 ## Facts that drive the workflow
 
-- Distribution: prebuilt binaries only — no source build, no npm package, no Figma API token. The skill bundles every target (darwin-arm64, darwin-amd64, linux-amd64, windows-amd64) plus `figma-plugin.zip`, `SHA256SUMS.txt`, and `VERSION` in `bin/`. **The skill folder is the install location**: the binary runs in place from `SKILL_DIR/bin/` and is never copied elsewhere; `install.sh` only prepares it (executable bit, Gatekeeper quarantine) and unpacks the plugin to `SKILL_DIR/plugin/`, and MCP configs point directly at the bundled asset. `--version <tag>` downloads from GitHub releases of `chuxu1793-cloud/figma-mcp` into `bin/` in place — use it for releases newer than the bundled one.
+- Distribution: prebuilt binaries only — no source build, no npm package, no Figma API token. The skill bundles every target (darwin-arm64, darwin-amd64, linux-amd64, windows-amd64) plus `figma-plugin.zip`, `SHA256SUMS.txt`, and `VERSION` in `bin/`. **The server binary and the Figma plugin live in different places**: the binary runs in place from `SKILL_DIR/bin/` — never copied elsewhere, MCP configs point directly at it — while the plugin deploys OUT of the skill folder to a user-choosable visible directory (`--plugin-dir`, default `~/figma`, layout `<plugin-dir>/plugin/`), because it is the one path a human must navigate, in Figma's import file picker. `--version <tag>` downloads from GitHub releases of `chuxu1793-cloud/figma-mcp` into `bin/` in place — use it for releases newer than the bundled one.
 - The binary is an MCP **stdio** server — the MCP client spawns it on demand. Never "start it as a service"; nothing listening between sessions is normal.
-- The skill folder must stay in place after setup: both the registered MCP command and the imported Figma plugin point into `SKILL_DIR`. Moving or deleting it breaks both.
+- After setup, two paths must stay in place: the skill folder (the registered MCP command points into `SKILL_DIR/bin/`) and the deployed plugin directory (the imported Figma plugin points at `<plugin-dir>/plugin/`). Moving or deleting either breaks the setup.
 - Each process also serves `127.0.0.1:1994` (`GET /ping`, `POST /rpc`, `GET /ws`) and elects a leader by binding the port.
 - A process exits only on stdin EOF or SIGINT — no idle timeout, no self-eviction. So a server outlives a force-quit client or a session left open for days, keeps the port and the plugin WebSocket, and keeps executing its **original** binary image after an upgrade. Every tool call then runs old code. Treat stale processes as a routine check, not an exotic failure.
 - The Figma plugin auto-connects on open and retries every 1.5s. Importing/opening it is GUI-only and **cannot** be scripted.
@@ -25,7 +25,7 @@ Automate everything that can be automated. Probe the bridge with `doctor.sh --te
 | `install.sh` / `doctor.sh` | native | needs Git Bash or WSL (auto-detects MSYS/Cygwin, uses the `.exe` asset, falls back to PowerShell `Expand-Archive` when `unzip` is absent) | native |
 | `register_client.cjs` | native | native (`node` on Windows works; Claude Desktop path resolves to `%APPDATA%\Claude`) | native |
 | Launch Figma | `open -a Figma` | Start menu — no reliable CLI hook; do not invent one | **no official Figma Desktop app** → plugin bridge unavailable |
-| Reveal plugin folder | `open SKILL_DIR/plugin` | `explorer.exe SKILL_DIR\plugin` (Git Bash) or `explorer SKILL_DIR\plugin` (cmd/PowerShell) | `xdg-open SKILL_DIR/plugin` |
+| Reveal plugin folder | `open <plugin-dir>/plugin` | `explorer.exe <plugin-dir>\plugin` (Git Bash) or `explorer <plugin-dir>\plugin` (cmd/PowerShell) | `xdg-open <plugin-dir>/plugin` |
 
 Determine the OS from the environment context or `uname -s` before emitting any command. On Linux, install and register normally, but state the plugin-bridge limitation up front — see the Linux section in `references/troubleshooting.md` for the details and workarounds. If Windows has no Git Bash or WSL, follow the manual sequence in `references/troubleshooting.md` instead of inventing shell commands.
 
@@ -36,18 +36,22 @@ All scripts print `KEY: value` lines; `STATUS: error` plus `REASON:` means failu
 ### 1. Assess before acting
 
 ```bash
-bash SKILL_DIR/scripts/doctor.sh [--port 1994]
+bash SKILL_DIR/scripts/doctor.sh [--plugin-dir <path>] [--port 1994]
 ```
 
 Act only on the `NEXT:` lines it prints. Skip to step 5 if nothing else is missing. `PROC:` lines whose `state=` starts with `stale` mean step 3 is required — a stale process silently serves every tool call.
 
-### 2. Prepare or update (in place)
+### 2. Prepare or update (server in place, plugin deployed out)
 
 ```bash
-bash SKILL_DIR/scripts/install.sh [--version <tag>] [--force]
+bash SKILL_DIR/scripts/install.sh [--plugin-dir <path>] [--version <tag>] [--force]
 ```
 
-Idempotent and offline by default: verifies sha256 of the bundled binary and plugin zip in place against `SKILL_DIR/bin/SHA256SUMS.txt`, marks the binary executable, strips the macOS quarantine attribute, unpacks the plugin to `SKILL_DIR/plugin/`, and reports `already-current` when checksum, executable bit, and manifest all check out. Nothing is copied outside the skill folder. `--force` re-unpacks (and downgrades). `--version <tag>` installs that GitHub release into `SKILL_DIR/bin/` in place, refreshing `bin/SHA256SUMS.txt` and `bin/VERSION` so later offline runs stay consistent. Without a bundled asset for the current platform it falls back to the GitHub release (online).
+Idempotent and offline by default: verifies sha256 of the bundled binary and plugin zip against `SKILL_DIR/bin/SHA256SUMS.txt`, marks the binary executable in place, strips the macOS quarantine attribute, and deploys the plugin to `<plugin-dir>/plugin/` (replacing the previous copy). Reports `already-current` when checksum, executable bit, and the deployed manifest all check out. The server binary never leaves `SKILL_DIR/bin/`.
+
+Ask the user for `--plugin-dir` before the first deploy — announce → ask, free-form path: state that the Figma plugin will be copied to `<path>/plugin/` and that Figma will import its manifest from there. If they have no preference, omit the flag and the default `~/figma` is used. The choice is not persisted anywhere: when `doctor.sh` already reports the deployed manifest, reuse that path on upgrades without re-asking; when it reports the manifest missing, ask again (if the user previously chose a custom path, they state it — doctor cannot remember it).
+
+`--force` re-deploys (and downgrades). `--version <tag>` installs that GitHub release into `SKILL_DIR/bin/` in place, refreshing `bin/SHA256SUMS.txt` and `bin/VERSION` so later offline runs stay consistent. Without a bundled asset for the current platform it falls back to the GitHub release (online).
 
 Omit `--version` (defaults to the bundled release) unless the user names a tag; `--version <tag>` or `--version latest` installs that release from GitHub into `bin/` in place. Do not invent tags or version numbers, and do not state a version unless a script or `GET /ping` reported it — the binary has no `--version` flag.
 
@@ -92,7 +96,7 @@ Then guide step by step. The rule governing every round is **announce → ask**:
 Sequence:
 
 1. Announce: use the Figma **Desktop** app (a browser tab will not work; Figma exposes no automation hook for these steps), open any Figma file — the Plugins menu appears only inside an open file — and check whether **Plugins > Development** already lists *Figma MCP*. Ask: does the menu list Figma MCP? Yes → step 3; no / not sure → step 2.
-2. Announce: run **Plugins > Development > Import plugin from manifest…** and select `SKILL_DIR/plugin/manifest.json` in the file picker. When `SKILL_DIR` is a hidden path (typical for a `~/.codely-cli/skills/…` install copy), say how to reach it: on macOS press `Cmd+Shift+G` in the picker and paste the full manifest path, or press `Cmd+Shift+.` to reveal hidden folders; on Windows paste the path into the file name box. Ask: did the import finish? If the user cannot find the menu, repeat the prerequisites from step 1 (file open, Desktop app) before re-asking.
+2. Announce: run **Plugins > Development > Import plugin from manifest…** and select the deployed `<plugin-dir>/plugin/manifest.json` (step 2's `MANIFEST:` line — default `~/figma/plugin/manifest.json`) in the file picker. If that path is hidden or awkward to reach in the picker, say how: on macOS press `Cmd+Shift+G` and paste the full manifest path, or press `Cmd+Shift+.` to reveal hidden folders; on Windows paste the path into the file name box. Ask: did the import finish? If the user cannot find the menu, repeat the prerequisites from step 1 (file open, Desktop app) before re-asking.
 3. Announce: in any open file, run **Plugins > Development > Figma MCP**; keep the plugin window open — closing it drops the bridge, and it reconnects on its own when reopened. Ask: is the plugin window showing?
 4. Move straight to step 6: its bridge check is the real confirmation that step 3 worked. If it reports not connected, wait ~3s, check once more, then troubleshoot (plugin gear host/port, symptom table in `references/troubleshooting.md`).
 
@@ -101,7 +105,7 @@ Do not claim to have imported or opened the plugin — only the user's confirmat
 ### 6. Verify end to end
 
 ```bash
-bash SKILL_DIR/scripts/doctor.sh [--port 1994] --test
+bash SKILL_DIR/scripts/doctor.sh [--plugin-dir <path>] [--port 1994] --test
 ```
 
 `--test` starts a temporary server (only when the port is free), calls `get_metadata` through `POST /rpc`, then shuts it down. Success looks like `BRIDGE: connected` followed by Figma file data.
@@ -126,8 +130,8 @@ Close by reporting the binary path, manifest path, config file touched, and the 
 - Never report a stale process as cleaned without the script's `STATUS: cleaned` plus the `PORT:` line.
 - Never hand-edit MCP configs when `register_client.cjs` can do it; it creates `.bak` backups.
 - Use absolute paths in MCP configs; clients do not expand `~`.
-- The binary runs in place from `SKILL_DIR/bin/` — never copy it to another directory, and never register a `command` path outside the skill folder.
-- Never move or delete the skill folder after setup: the registered MCP command and the imported Figma plugin both point into it.
+- The server binary runs in place from `SKILL_DIR/bin/` — never copy it to another directory, and never register a `command` path outside the skill folder. The plugin, by contrast, is always deployed OUT of the skill folder by `install.sh` — never import it from inside `SKILL_DIR`.
+- Never move or delete the skill folder or the deployed plugin directory after setup: the MCP command points into the skill folder, and the imported plugin points at the deployed copy.
 - Non-default port: pass `--port N` in the config `args` **and** set the same port in the plugin gear dialog, otherwise the bridge stays down.
 - Do not suggest building from source or `npx` — the source repo is private and no npm package exists.
 - Invent no tool names, flags, endpoints, or menu paths beyond those in this file and `references/troubleshooting.md`.

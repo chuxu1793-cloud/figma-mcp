@@ -1,25 +1,29 @@
 #!/bin/bash
-# Prepares the figma-mcp server + Figma plugin entirely in place inside this
-# skill's folder: the binary runs from SKILL_DIR/bin/<platform asset> and is
-# never copied elsewhere — MCP configs point directly at it, and the plugin is
-# unpacked to SKILL_DIR/plugin/.
-#   default:        verify the bundled binary offline against bin/SHA256SUMS.txt,
-#                   mark it executable, strip macOS quarantine, unpack the plugin
+# Prepares the figma-mcp server + Figma plugin:
+#   * server binary: runs IN PLACE from SKILL_DIR/bin/<platform asset>; MCP
+#     configs point directly at it and it is never copied elsewhere
+#   * Figma plugin: deploys OUT of the skill folder to a user-visible
+#     directory (--plugin-dir, default $HOME/figma, layout <dir>/plugin/) —
+#     it is the one path a human must navigate, in Figma's import file picker
+#   default:         verify the bundled binary offline against bin/SHA256SUMS.txt,
+#                    mark it executable, strip macOS quarantine, deploy the plugin
 #   --version <tag>: download that GitHub release into bin/ in place, also
-#                   refreshing bin/SHA256SUMS.txt and bin/VERSION so later
-#                   offline runs verify against the new checksums
+#                    refreshing bin/SHA256SUMS.txt and bin/VERSION so later
+#                    offline runs verify against the new checksums
 # Idempotent. Outputs machine-readable KEY: value lines only.
-# Usage: install.sh [--version <tag>] [--force]
+# Usage: install.sh [--plugin-dir <path>] [--version <tag>] [--force]
 set -uo pipefail
 
 REPO="chuxu1793-cloud/figma-mcp"
 TAG=""
 FORCE=0
+PLUGIN_DIR="$HOME/figma"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --version) TAG="$2"; shift 2 ;;
-    --force)   FORCE=1; shift ;;
+    --plugin-dir) PLUGIN_DIR="$2"; shift 2 ;;
+    --version)    TAG="$2"; shift 2 ;;
+    --force)      FORCE=1; shift ;;
     *) echo "STATUS: error"; echo "REASON: unknown argument $1"; exit 2 ;;
   esac
 done
@@ -29,7 +33,6 @@ fail() { echo "STATUS: error"; echo "REASON: $1"; exit 1; }
 SELF_DIR=$(cd "$(dirname "$0")" && pwd)
 SKILL_DIR=$(cd "$SELF_DIR/.." && pwd)
 BUNDLE_DIR="$SKILL_DIR/bin"
-PLUGIN_DIR="$SKILL_DIR/plugin"
 BUNDLED_TAG=""
 [ -f "$BUNDLE_DIR/VERSION" ] && BUNDLED_TAG=$(tr -d '[:space:]' < "$BUNDLE_DIR/VERSION")
 
@@ -47,7 +50,15 @@ case "$OS-$ARCH" in
 esac
 
 BIN="$BUNDLE_DIR/$ASSET"
-MANIFEST="$PLUGIN_DIR/manifest.json"
+
+# The plugin deploys into a user-chosen directory (default $HOME/figma). Guard:
+# <plugin-dir>/plugin is deleted before each deploy, so refuse root-ish paths
+# where that would be destructive.
+PLUGIN_DIR="${PLUGIN_DIR%/}"
+case "$PLUGIN_DIR" in
+  ""|"/"|"$HOME") fail "refusing to deploy the plugin directly into '${PLUGIN_DIR:-/}'; pass a dedicated --plugin-dir such as \$HOME/figma" ;;
+esac
+MANIFEST="$PLUGIN_DIR/plugin/manifest.json"
 
 # --- source resolution ---------------------------------------------------------
 # Bundled by default; an explicit --version (including "latest") always goes
@@ -160,15 +171,16 @@ else
     chmod +x "$BIN" || fail "cannot mark $BIN executable"
   fi
 
-  rm -rf "$PLUGIN_DIR"
-  extract "$SRC_ZIP" "$SKILL_DIR" || fail "cannot extract plugin into $SKILL_DIR (need unzip, or PowerShell on Windows)"
+  mkdir -p "$PLUGIN_DIR" || fail "cannot create $PLUGIN_DIR"
+  rm -rf "$PLUGIN_DIR/plugin"
+  extract "$SRC_ZIP" "$PLUGIN_DIR" || fail "cannot extract plugin into $PLUGIN_DIR (need unzip, or PowerShell on Windows)"
   [ -f "$MANIFEST" ] || fail "plugin manifest missing after extract: $MANIFEST"
 
   # macOS quarantines downloaded binaries; strip it so Gatekeeper does not
   # block the unsigned binary when the MCP client spawns it.
   if [ "$OS" = "darwin" ]; then
     xattr -d com.apple.quarantine "$BIN" 2>/dev/null
-    xattr -cr "$PLUGIN_DIR" 2>/dev/null
+    xattr -cr "$PLUGIN_DIR/plugin" 2>/dev/null
   fi
 
   echo "STATUS: installed"

@@ -92,7 +92,7 @@ Then guide step by step. The rule governing every round is **announce → ask**:
 Sequence:
 
 1. Announce: use the Figma **Desktop** app (a browser tab will not work; Figma exposes no automation hook for these steps), open any Figma file — the Plugins menu appears only inside an open file — and check whether **Plugins > Development** already lists *Figma MCP*. Ask: does the menu list Figma MCP? Yes → step 3; no / not sure → step 2.
-2. Announce: run **Plugins > Development > Import plugin from manifest…** and select `SKILL_DIR/plugin/manifest.json` in the file picker. Ask: did the import finish? If the user cannot find the menu, repeat the prerequisites from step 1 (file open, Desktop app) before re-asking.
+2. Announce: run **Plugins > Development > Import plugin from manifest…** and select `SKILL_DIR/plugin/manifest.json` in the file picker. When `SKILL_DIR` is a hidden path (typical for a `~/.codely-cli/skills/…` install copy), say how to reach it: on macOS press `Cmd+Shift+G` in the picker and paste the full manifest path, or press `Cmd+Shift+.` to reveal hidden folders; on Windows paste the path into the file name box. Ask: did the import finish? If the user cannot find the menu, repeat the prerequisites from step 1 (file open, Desktop app) before re-asking.
 3. Announce: in any open file, run **Plugins > Development > Figma MCP**; keep the plugin window open — closing it drops the bridge, and it reconnects on its own when reopened. Ask: is the plugin window showing?
 4. Move straight to step 6: its bridge check is the real confirmation that step 3 worked. If it reports not connected, wait ~3s, check once more, then troubleshoot (plugin gear host/port, symptom table in `references/troubleshooting.md`).
 

@@ -64,6 +64,8 @@ Prerequisites: Figma **Desktop** app only (a browser tab will not work), and any
 4. In any open file, run **Plugins > Development > Figma MCP**.
 5. The plugin window must stay open — closing it drops the WebSocket. It reconnects on its own when reopened.
 
+Reaching a hidden `SKILL_DIR` in the file picker (a `~/.codely-cli/skills/…` install copy, or `%APPDATA%\…` on Windows): on macOS press `Cmd+Shift+G` and paste the full manifest path — no need to reveal hidden folders — or press `Cmd+Shift+.` to show them (works in Finder too); on Windows paste the path into the file name box.
+
 One-time only: after step 3 the plugin stays in the Development menu. The skill folder must stay in place afterwards — the imported plugin and the registered MCP command both live inside it.
 
 When guiding a user live, follow SKILL.md step 5: work step by step with announce → ask — state the operation in a text message first, then ask about the result with the `ask_user` dialog. Verify with `doctor.sh --test`. The question text must restate the operation and its expected outcome so the user never answers blind.

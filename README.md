@@ -70,15 +70,15 @@ shasum -a 256 -c SHA256SUMS.txt --ignore-missing
 
 ### 1c. Let an AI agent do it (Codely CLI)
 
-Install the bundled skill and let the agent handle installation, config registration, and verification:
+Install the skill from this repository's complete skill folder and let the agent handle installation, config registration, and verification:
 
 ```bash
-curl -L -O https://raw.githubusercontent.com/chuxu1793-cloud/figma-mcp/main/skill/figma-mcp.skill
-codely skills install figma-mcp.skill --scope user
+git clone https://github.com/chuxu1793-cloud/figma-mcp.git
+codely skills install figma-mcp/skill/figma-mcp --scope user
 # then in Codely CLI: /skills reload
 ```
 
-The skill bundles the prebuilt binaries for all four platforms (~16 MB package), so the agent installs figma-mcp **fully offline** — no GitHub access needed at install time. `install.sh --version <tag>` can still fetch a specific GitHub release.
+The skill folder bundles the prebuilt binaries for all four platforms (~16 MB), so the agent installs figma-mcp **fully offline** — no GitHub releases access needed at install time. `install.sh --version <tag>` can still fetch a specific GitHub release.
 
 Afterwards just say "安装 figma-mcp" / "figma mcp 连不上" and the agent runs the install, registers the MCP entry for your client, and probes the plugin bridge. Sources live in [`skill/figma-mcp/`](skill/figma-mcp).
 

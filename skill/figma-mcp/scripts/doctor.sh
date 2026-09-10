@@ -1,17 +1,15 @@
 #!/bin/bash
 # Reports figma-mcp setup state and what is still missing.
-# Usage: doctor.sh [--dir ~/figma] [--port 1994] [--test]
+# Usage: doctor.sh [--port 1994] [--test]
 #   --test  temporarily starts the binary itself to probe the plugin bridge
 #           (only when nothing is listening on the port)
 set -uo pipefail
 
-DIR="$HOME/figma"
 PORT=1994
 TEST=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --dir)  DIR="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --test) TEST=1; shift ;;
     *) echo "REASON: unknown argument $1"; exit 2 ;;
@@ -20,12 +18,18 @@ done
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$OS" in mingw*|msys*|cygwin*) OS="windows" ;; esac
-EXE=""; [ "$OS" = "windows" ] && EXE=".exe"
+ARCH=$(uname -m)
 SELF_DIR=$(cd "$(dirname "$0")" && pwd)
-
-DIR="${DIR%/}"
-BIN="$DIR/figma-mcp$EXE"
-MANIFEST="$DIR/plugin/manifest.json"
+SKILL_DIR=$(cd "$SELF_DIR/.." && pwd)
+case "$OS-$ARCH" in
+  darwin-arm64)   ASSET="figma-mcp-darwin-arm64" ;;
+  darwin-x86_64)  ASSET="figma-mcp-darwin-amd64" ;;
+  linux-x86_64)   ASSET="figma-mcp-linux-amd64" ;;
+  windows-x86_64) ASSET="figma-mcp-windows-amd64.exe" ;;
+  *)              ASSET="figma-mcp" ;;
+esac
+BIN="$SKILL_DIR/bin/$ASSET"
+MANIFEST="$SKILL_DIR/plugin/manifest.json"
 NEXT=()
 echo "PLATFORM: $OS"
 
@@ -34,7 +38,7 @@ NEED_INSTALL=0
 if [ -x "$BIN" ]; then
   echo "BINARY: $BIN"
 else
-  echo "BINARY: missing ($BIN)"
+  echo "BINARY: missing or not executable ($BIN)"
   NEED_INSTALL=1
 fi
 
@@ -45,7 +49,7 @@ else
   NEED_INSTALL=1
 fi
 
-[ "$NEED_INSTALL" -eq 1 ] && NEXT+=("run this skill's scripts/install.sh --dir \"$DIR\"")
+[ "$NEED_INSTALL" -eq 1 ] && NEXT+=("run this skill's scripts/install.sh")
 
 if [ "$OS" = "darwin" ] && [ -f "$BIN" ]; then
   if xattr -p com.apple.quarantine "$BIN" >/dev/null 2>&1; then
@@ -57,20 +61,33 @@ if [ "$OS" = "darwin" ] && [ -f "$BIN" ]; then
 fi
 
 # --- MCP client configs referencing the binary -------------------------------
+# A current registration points at this skill's bundled asset by name. A
+# figma-mcp command that is not this asset (e.g. an old copy under ~/figma)
+# is reported as outdated: it still runs, but it defeats in-place upgrades,
+# so the config must be re-registered.
 FOUND=()
+OUTDATED=()
 for f in "$HOME/.codely-cli/settings.json" \
          "$HOME/Library/Application Support/Claude/claude_desktop_config.json" \
          "$HOME/.config/Claude/claude_desktop_config.json" \
          "${APPDATA:-$HOME/AppData/Roaming}/Claude/claude_desktop_config.json" \
          "$HOME/.cursor/mcp.json" \
          "$PWD/.mcp.json" "$PWD/.cursor/mcp.json" "$PWD/.vscode/mcp.json"; do
-  # Match a command ending in figma-mcp only, so unrelated servers such as
-  # "@scope/figma-mcp-go" are not miscounted as this binary.
-  [ -f "$f" ] && grep -Eq '"[^"]*figma-mcp(\.exe)?"' "$f" 2>/dev/null && FOUND+=("$f")
+  [ -f "$f" ] || continue
+  if grep -Fq "$ASSET" "$f" 2>/dev/null; then
+    FOUND+=("$f")
+  elif grep -Eq '"[^"]*figma-mcp(\.exe)?"' "$f" 2>/dev/null; then
+    OUTDATED+=("$f")
+  fi
 done
 if [ ${#FOUND[@]} -gt 0 ]; then
   echo "REGISTERED_IN: ${FOUND[*]}"
-else
+fi
+if [ ${#OUTDATED[@]} -gt 0 ]; then
+  echo "REGISTERED_OLD: ${OUTDATED[*]} (figma-mcp command outside this skill folder)"
+  NEXT+=("run this skill's scripts/register_client.cjs --client <id> --binary \"$BIN\" so the config points into the skill folder")
+fi
+if [ ${#FOUND[@]} -eq 0 ] && [ ${#OUTDATED[@]} -eq 0 ]; then
   echo "REGISTERED_IN: none found"
   NEXT+=("run this skill's scripts/register_client.cjs --client <id> --binary \"$BIN\"")
 fi
@@ -99,11 +116,11 @@ esac
 # lines are surfaced here. Runs before --test so the temporary probe server
 # started below is never mistaken for a leftover.
 if [ -x "$SELF_DIR/cleanup.sh" ]; then
-  SCAN=$(bash "$SELF_DIR/cleanup.sh" --dir "$DIR" --port "$PORT" 2>/dev/null)
+  SCAN=$(bash "$SELF_DIR/cleanup.sh" --port "$PORT" 2>/dev/null)
   echo "$SCAN" | grep -E '^(PROC|FOUND):' || true
   STALE_N=$(echo "$SCAN" | sed -n 's/^FOUND: [0-9]* process(es), \([0-9]*\) stale$/\1/p')
   if [ -n "${STALE_N:-}" ] && [ "$STALE_N" -gt 0 ]; then
-    NEXT+=("run this skill's scripts/cleanup.sh --dir \"$DIR\" --port $PORT --apply to drop $STALE_N stale process(es) holding the port with an outdated binary")
+    NEXT+=("run this skill's scripts/cleanup.sh --port $PORT --apply to drop $STALE_N stale process(es) holding the port with an outdated binary")
   fi
 fi
 

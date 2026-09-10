@@ -48,10 +48,10 @@ Commands and kill semantics are SKILL.md step 3: dry run first, read the `PROC:`
 | `/ping` version older than the release just installed; new tools missing after upgrade | A pre-upgrade process still owns the port and serves the old image | `cleanup.sh --apply` (see above), then re-verify with `doctor.sh --test` |
 | `doctor.sh --test` never starts a temporary server | Port already held, often by an orphaned process | Identify with `cleanup.sh`, clear it, re-run `--test` |
 | Bridge dies for every client at once, long after the Figma side looked fine | Stale leader was killed by the OS or lost its plugin socket; followers proxy into it | `cleanup.sh --apply`, reopen the plugin window |
-| Plugin missing from Figma's menu | Manifest not imported, or imported from a deleted path | Re-import `<dir>/plugin/manifest.json`; keep the directory in place |
+| Plugin missing from Figma's menu | Manifest not imported, or imported from a deleted path | Re-import `SKILL_DIR/plugin/manifest.json`; keep the skill folder in place |
 | Import option greyed out / absent | Using Figma in a browser | Development plugins require the Figma **Desktop** app |
 | `--version` fails with "unexpected argument" | Flag does not exist | Read the version from `GET /ping`, or compare the binary's sha256 against `SHA256SUMS.txt` |
-| Need a release newer than the bundled one | The skill ships the release current at packaging time | `install.sh --version <tag>` downloads it from GitHub (online); re-bundling the skill updates the default |
+| Need a release newer than the bundled one | The skill ships the release current at packaging time | `install.sh --version <tag>` installs it from GitHub into `SKILL_DIR/bin/` in place (online); re-bundling the skill updates the default |
 | Linux arm64 has no asset | Only darwin-arm64, darwin-amd64, linux-amd64, windows-amd64 are built | Run the amd64 build under emulation |
 
 ## Figma plugin import (GUI only — cannot be scripted)
@@ -60,35 +60,34 @@ Prerequisites: Figma **Desktop** app only (a browser tab will not work), and any
 
 1. Open the **Figma Desktop** app (`open -a Figma` on macOS).
 2. Menu: **Plugins > Development > Import plugin from manifest…**
-3. Select `<install-dir>/plugin/manifest.json` (default `~/figma/plugin/manifest.json`).
+3. Select `SKILL_DIR/plugin/manifest.json`.
 4. In any open file, run **Plugins > Development > Figma MCP**.
 5. The plugin window must stay open — closing it drops the WebSocket. It reconnects on its own when reopened.
 
-One-time only: after step 3 the plugin stays in the Development menu.
+One-time only: after step 3 the plugin stays in the Development menu. The skill folder must stay in place afterwards — the imported plugin and the registered MCP command both live inside it.
 
-When guiding a user live, follow SKILL.md step 5: work step by step with announce → ask — state the operation in a text message first, then pop the result dialog — and verify with `doctor.sh --test`. Never fire a dialog the user cannot understand on its own; the question text must restate the operation and its expected outcome.
+When guiding a user live, follow SKILL.md step 5: work step by step with announce → ask — state the operation in a text message first, then ask about the result with the `ask_user` dialog. Verify with `doctor.sh --test`. The question text must restate the operation and its expected outcome so the user never answers blind.
 
 ## Windows without Git Bash or WSL
 
-`install.sh` and `doctor.sh` need a POSIX shell. With Git Bash or WSL they work as-is (the `.exe` asset is selected automatically). Without one: if this machine already has the skill unpacked (for example via `codely skills install`), copy `figma-mcp-windows-amd64.exe` and `figma-plugin.zip` from the skill's `bin\` directory instead of downloading, verifying against the bundled `SHA256SUMS.txt`. Otherwise do this in PowerShell:
+`install.sh` and `doctor.sh` need a POSIX shell. With Git Bash or WSL they work as-is (the `.exe` asset is selected automatically). Without one, do the same steps by hand in PowerShell — everything stays inside the skill folder (replace `$skill` with the skill folder's absolute path):
 
 ```powershell
-$dir = "$env:USERPROFILE\figma"; New-Item -ItemType Directory -Force $dir | Out-Null
-$base = "https://github.com/chuxu1793-cloud/figma-mcp/releases/latest/download"
-Invoke-WebRequest "$base/figma-mcp-windows-amd64.exe" -OutFile "$dir\figma-mcp.exe"
-Invoke-WebRequest "$base/figma-plugin.zip" -OutFile "$dir\figma-plugin.zip"
-Expand-Archive -Force "$dir\figma-plugin.zip" $dir; Remove-Item "$dir\figma-plugin.zip"
-Invoke-WebRequest "$base/SHA256SUMS.txt" -OutFile "$dir\SHA256SUMS.txt"
-(Get-FileHash "$dir\figma-mcp.exe" -Algorithm SHA256).Hash.ToLower()   # compare with SHA256SUMS.txt
+$skill = "$env:USERPROFILE\.codely-cli\skills\figma-mcp"   # example path — use the real skill folder
+Expand-Archive -Force "$skill\bin\figma-plugin.zip" "$skill"          # creates $skill\plugin\
+Unblock-File "$skill\bin\figma-mcp-windows-amd64.exe"                 # strips the downloaded-file mark
+(Get-FileHash "$skill\bin\figma-mcp-windows-amd64.exe" -Algorithm SHA256).Hash.ToLower()   # compare with bin\SHA256SUMS.txt
 ```
 
-Then register manually with a double-escaped path — `"command": "C:\\Users\\you\\figma\\figma-mcp.exe"` — using the shapes below, and import `plugin\manifest.json` in Figma Desktop.
+If `bin\figma-mcp-windows-amd64.exe` is missing from the bundle, download the release into `bin\` first: set `$base = "https://github.com/chuxu1793-cloud/figma-mcp/releases/latest/download"` and run `Invoke-WebRequest "$base/figma-mcp-windows-amd64.exe" -OutFile "$skill\bin\figma-mcp-windows-amd64.exe"`.
+
+Then register manually with a double-escaped path pointing into the skill folder — `"command": "C:\\Users\\you\\.codely-cli\\skills\\figma-mcp\\bin\\figma-mcp-windows-amd64.exe"` — using the shapes below, and import `plugin\manifest.json` in Figma Desktop.
 
 Verification without the scripts: `curl http://127.0.0.1:1994/ping` while an MCP client session is running.
 
 ## Linux
 
-Binary and registration work normally (`figma-mcp-linux-amd64`, bundled in the skill's `bin/`; no arm64 asset). Figma ships no official Linux desktop app, and development plugins cannot be imported in a browser tab — so the plugin bridge cannot be established with official software. Options: run the client/plugin on a macOS or Windows machine and point the plugin at that host's port, or use an unofficial Figma Linux build (untested here).
+Binary and registration work normally — `figma-mcp-linux-amd64` runs in place from the skill's `bin/`; no arm64 asset. Figma ships no official Linux desktop app, and development plugins cannot be imported in a browser tab — so the plugin bridge cannot be established with official software. Options: run the client/plugin on a macOS or Windows machine and point the plugin at that host's port, or use an unofficial Figma Linux build (untested here).
 
 ## Environment variables
 
@@ -105,20 +104,20 @@ Pass them via the MCP client's `env` block, e.g. `"env": { "FIGMA_MCP_TIMEOUT": 
 
 ## Manual config shapes
 
-Only needed when `register_client.cjs` refuses the file (e.g. JSON with comments).
+Only needed when `register_client.cjs` refuses the file (e.g. JSON with comments). The `command` always points at the skill's `bin/` asset — never at a copied binary elsewhere.
 
 `mcpServers` shape — Codely (`~/.codely-cli/settings.json`), Claude Desktop, Claude Code (`.mcp.json`), Cursor (`~/.cursor/mcp.json`):
 
 ```json
-{ "mcpServers": { "figma": { "command": "/Users/you/figma/figma-mcp" } } }
+{ "mcpServers": { "figma": { "command": "<skill-dir>/bin/figma-mcp-darwin-arm64" } } }
 ```
 
 `servers` shape — VS Code / Copilot (`.vscode/mcp.json`):
 
 ```json
-{ "servers": { "figma": { "type": "stdio", "command": "/Users/you/figma/figma-mcp" } } }
+{ "servers": { "figma": { "type": "stdio", "command": "<skill-dir>/bin/figma-mcp-darwin-arm64" } } }
 ```
 
-Claude Code CLI alternative: `claude mcp add -s project figma -- /Users/you/figma/figma-mcp`
+Claude Code CLI alternative: `claude mcp add -s project figma -- <skill-dir>/bin/figma-mcp-darwin-arm64`
 
 Non-default port: add `"args": ["--port", "1995"]` and set the same port in the plugin.

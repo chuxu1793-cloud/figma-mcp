@@ -1,7 +1,7 @@
 #!/bin/bash
 # Finds figma-mcp server processes and reports which are stale; optionally kills them.
 #
-# Usage: cleanup.sh [--dir ~/figma] [--port 1994] [--apply] [--all]
+# Usage: cleanup.sh [--port 1994] [--apply] [--all]
 #   (default)  dry run — report only, change nothing
 #   --apply    kill the processes classified as stale
 #   --all      treat every figma-mcp process as a target, including current ones
@@ -16,20 +16,19 @@
 #   orphan          parent is gone (reparented to init)
 #   image-deleted   the executable it runs was deleted/moved (e.g. to Trash)
 #   image-outdated  running a different inode than the installed binary
-#   image-foreign   running a binary outside the given --dir
+#   image-foreign   running a binary outside this skill's bin/ (e.g. an old
+#                   copied install under ~/figma)
 #
 # All stale processes are killed together on purpose: a follower takes over the
 # port within 3-5s, so killing only the leader just promotes another stale one.
 set -uo pipefail
 
-DIR="$HOME/figma"
 PORT=1994
 APPLY=0
 ALL=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --dir)   DIR="$2"; shift 2 ;;
     --port)  PORT="$2"; shift 2 ;;
     --apply) APPLY=1; shift ;;
     --all)   ALL=1; shift ;;
@@ -37,12 +36,19 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+SELF_DIR=$(cd "$(dirname "$0")" && pwd)
+SKILL_DIR=$(cd "$SELF_DIR/.." && pwd)
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$OS" in mingw*|msys*|cygwin*) OS="windows" ;; esac
-EXE=""; [ "$OS" = "windows" ] && EXE=".exe"
-
-DIR="${DIR%/}"
-BIN="$DIR/figma-mcp$EXE"
+ARCH=$(uname -m)
+case "$OS-$ARCH" in
+  darwin-arm64)   ASSET="figma-mcp-darwin-arm64" ;;
+  darwin-x86_64)  ASSET="figma-mcp-darwin-amd64" ;;
+  linux-x86_64)   ASSET="figma-mcp-linux-amd64" ;;
+  windows-x86_64) ASSET="figma-mcp-windows-amd64.exe" ;;
+  *)              ASSET="figma-mcp" ;;
+esac
+BIN="$SKILL_DIR/bin/$ASSET"
 echo "PLATFORM: $OS"
 echo "MODE: $([ "$APPLY" -eq 1 ] && echo apply || echo dry-run)"
 
@@ -98,13 +104,18 @@ image_of() {
 }
 
 # --- every figma-mcp server process ------------------------------------------
-# Matched on the executable token, not a substring of the whole command line, so
-# this script and doctor.sh (whose own paths contain "figma-mcp") never match.
+# Matched on the executable token, not a substring of the whole command line,
+# so this script and doctor.sh (whose own paths contain "figma-mcp") never
+# match. The bundled asset names are enumerated exactly so unrelated servers
+# such as figma-mcp-go still never match; plain "figma-mcp" catches processes
+# from pre-in-place copied installs (e.g. ~/figma/figma-mcp).
 list_procs() {
   case "$OS" in
     windows)
-      tasklist.exe /FO CSV /NH /FI "IMAGENAME eq figma-mcp.exe" 2>/dev/null |
-        awk -F'","' '{gsub(/"/,"",$2); if ($2 ~ /^[0-9]+$/) print $2 "\t?\t?"}'
+      for img in figma-mcp.exe figma-mcp-windows-amd64.exe; do
+        tasklist.exe /FO CSV /NH /FI "IMAGENAME eq $img" 2>/dev/null |
+          awk -F'","' '{gsub(/"/,"",$2); if ($2 ~ /^[0-9]+$/) print $2 "\t?\t?"}'
+      done
       ;;
     *)
       ps -eo pid=,ppid=,etime=,args= 2>/dev/null | while IFS= read -r line; do
@@ -113,7 +124,7 @@ list_procs() {
         pid="$1"; ppid="$2"; etime="$3"; shift 3
         first="$1"
         case "${first##*/}" in
-          figma-mcp|figma-mcp.exe) printf '%s\t%s\t%s\n' "$pid" "$ppid" "$etime" ;;
+          figma-mcp|figma-mcp.exe|figma-mcp-darwin-arm64|figma-mcp-darwin-amd64|figma-mcp-linux-amd64) printf '%s\t%s\t%s\n' "$pid" "$ppid" "$etime" ;;
         esac
       done
       ;;
@@ -240,4 +251,4 @@ fi
 
 echo "STATUS: cleaned"
 echo "NEXT: reopen the Figma MCP plugin window if the bridge was in use — it reconnects on its own within ~1.5s"
-echo "NEXT: run this skill's scripts/doctor.sh --dir \"$DIR\" --test to confirm the bridge"
+echo "NEXT: run this skill's scripts/doctor.sh --test to confirm the bridge"

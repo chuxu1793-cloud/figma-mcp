@@ -44,14 +44,14 @@ Act only on the `NEXT:` lines it prints. Skip to step 5 if nothing else is missi
 ### 2. Prepare or update (server in place, plugin deployed out)
 
 ```bash
-bash SKILL_DIR/scripts/install.sh [--plugin-dir <path>] [--version <tag>] [--force]
+bash SKILL_DIR/scripts/install.sh [--plugin-dir <path>] [--version <tag>] [--all-platforms] [--force]
 ```
 
 Idempotent and offline by default: verifies sha256 of the bundled binary and plugin zip against `SKILL_DIR/bin/SHA256SUMS.txt`, marks the binary executable in place, strips the macOS quarantine attribute, and deploys the plugin to `<plugin-dir>/plugin/` (replacing the previous copy). Reports `already-current` when checksum, executable bit, and the deployed manifest all check out. The server binary never leaves `SKILL_DIR/bin/`.
 
 Ask the user for `--plugin-dir` before the first deploy — announce → ask, free-form path: state that the Figma plugin will be copied to `<path>/plugin/` and that Figma will import its manifest from there. If they have no preference, omit the flag and the default `~/figma` is used. The choice is not persisted anywhere: when `doctor.sh` already reports the deployed manifest, reuse that path on upgrades without re-asking; when it reports the manifest missing, ask again (if the user previously chose a custom path, they state it — doctor cannot remember it).
 
-`--force` re-deploys (and downgrades). `--version <tag>` installs that GitHub release into `SKILL_DIR/bin/` in place, refreshing `bin/SHA256SUMS.txt` and `bin/VERSION` so later offline runs stay consistent. Without a bundled asset for the current platform it falls back to the GitHub release (online).
+`--force` re-deploys (and downgrades). `--version <tag>` installs that GitHub release into `SKILL_DIR/bin/` in place — downloads resume across interrupted transfers — refreshing `bin/SHA256SUMS.txt`, `bin/figma-plugin.zip` and `bin/VERSION` so later offline runs stay consistent. It refreshes only the current platform's binary by default; add `--all-platforms` to fetch every platform's binary so the whole bundle agrees with the new `SHA256SUMS.txt` (platforms already matching the release are skipped, not re-downloaded). Without a bundled asset for the current platform it falls back to the GitHub release (online).
 
 Omit `--version` (defaults to the bundled release) unless the user names a tag; `--version <tag>` or `--version latest` installs that release from GitHub into `bin/` in place. Do not invent tags or version numbers, and do not state a version unless a script or `GET /ping` reported it — the binary has no `--version` flag.
 

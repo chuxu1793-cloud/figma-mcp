@@ -51,7 +51,7 @@ Commands and kill semantics are SKILL.md step 3: dry run first, read the `PROC:`
 | Plugin missing from Figma's menu | Manifest not imported, or imported from a deleted path | Re-import `<plugin-dir>/plugin/manifest.json` (default `~/figma/plugin/`); keep the deployed folder in place |
 | Import option greyed out / absent | Using Figma in a browser | Development plugins require the Figma **Desktop** app |
 | `--version` fails with "unexpected argument" | Flag does not exist | Read the version from `GET /ping`, or compare the binary's sha256 against `SHA256SUMS.txt` |
-| Need a release newer than the bundled one | The skill ships the release current at packaging time | `install.sh --version <tag>` installs it from GitHub into `SKILL_DIR/bin/` in place (online); re-bundling the skill updates the default |
+| Need a release newer than the bundled one | The skill ships the release current at packaging time | `install.sh --version <tag>` installs it from GitHub into `SKILL_DIR/bin/` in place (online; add `--all-platforms` to refresh every platform's binary, not just the current one); re-bundling the skill updates the default |
 | Linux arm64 has no asset | Only darwin-arm64, darwin-amd64, linux-amd64, windows-amd64 are built | Run the amd64 build under emulation |
 
 ## Figma plugin import (GUI only — cannot be scripted)

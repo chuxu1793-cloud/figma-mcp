@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "bin": "file:bin"
+  }
+}

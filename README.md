@@ -14,7 +14,7 @@ Figma MCP server written in Rust, with full read/write access via plugin — no 
 **Highlights**
 - No Figma API token required
 - No rate limits — free plan friendly
-- **Read and Write** live Figma data via plugin bridge — 92 tools total
+- **Read and Write** live Figma data via plugin bridge — 128 tools total
 - Full design automation — styles, variables, components, prototypes, and content
 - Design strategies included — 14 prompts built in
 - Written in Rust — fast, memory-safe, single binary
@@ -78,7 +78,7 @@ codely skills install figma-mcp/skill/figma-mcp --scope user
 # then in Codely CLI: /skills reload
 ```
 
-The skill folder bundles the prebuilt binaries for all four platforms (~16 MB), so the agent installs figma-mcp **fully offline** — no GitHub releases access needed at install time. `install.sh --version <tag>` can still fetch a specific GitHub release.
+The skill folder bundles the prebuilt binaries for all four platforms (~49 MB), so the agent installs figma-mcp **fully offline** — no GitHub releases access needed at install time. `install.sh --version <tag>` can still fetch a specific GitHub release.
 
 Afterwards just say "安装 figma-mcp" / "figma mcp 连不上" and the agent runs the install, registers the MCP entry for your client, and probes the plugin bridge. Sources live in [`skill/figma-mcp/`](skill/figma-mcp).
 
@@ -156,31 +156,31 @@ Example — custom port with a longer tool timeout:
 
 ---
 
-## Available Tools (92 total)
+## Available Tools (128 total)
 
-### Read Tools (17)
+### Read Tools (35)
 
 | Category | Tools |
 |----------|-------|
-| Document | `get_pages`, `get_metadata`, `get_selection`, `get_viewport` |
-| Nodes | `get_nodes_info`, `get_design_context`, `search_nodes`, `scan_nodes_by_types` |
-| Styles | `get_styles`, `get_variable_defs`, `get_local_components`, `get_annotations`, `get_fonts` |
+| Document | `get_pages`, `get_metadata`, `get_selection`, `get_viewport`, `get_current_user` |
+| Nodes | `get_nodes_info`, `get_design_context`, `search_nodes`, `search_document`, `scan_nodes_by_types`, `get_styled_text_segments` |
+| Styles | `get_styles`, `get_variable_defs`, `get_local_components`, `get_annotations`, `get_fonts`, `list_available_fonts`, `get_font_variation_axes`, `get_animation_styles`, `get_css` |
+| Libraries | `list_team_libraries`, `list_library_components`, `list_library_variables` |
 | Prototype | `get_reactions` |
-| Export | `get_screenshot`, `export_tokens` |
-| Data | `get_plugin_data` |
+| Export | `get_screenshot`, `export_tokens`, `get_image_bytes`, `export_nodes`, `export_nodes_as_rest_json`, `export_frames_to_pdf`, `get_export_settings` |
+| Data | `get_plugin_data`, `get_plugin_data_keys`, `get_relaunch_data`, `get_document_change_log` |
 
-### Write Tools (75)
+### Write Tools (93)
 
 | Category | Tools |
 |----------|-------|
-| Create | `create_frame`, `create_rectangle`, `create_ellipse`, `create_text`, `import_image`, `create_component`, `create_section`, `create_line`, `create_star`, `create_polygon`, `create_node_from_svg`, `create_vector`, `outline_stroke`, `batch_create_nodes` |
-| Modify | `set_text`, `set_text_properties`, `set_fills`, `set_strokes`, `set_gradient_fill`, `move_nodes`, `resize_nodes`, `rename_node`, `clone_node`, `set_opacity`, `set_corner_radius`, `set_auto_layout`, `delete_nodes`, `set_visible`, `set_locked`, `rotate_nodes`, `reorder_nodes`, `set_blend_mode`, `set_constraints`, `set_layer_behavior`, `reparent_nodes`, `batch_rename_nodes`, `find_replace_text`, `set_viewport`, `set_plugin_data`, `set_text_range` |
-| Styles | `create_paint_style`, `create_text_style`, `create_effect_style`, `create_grid_style`, `update_paint_style`, `update_text_style`, `update_effect_style`, `update_grid_style`, `delete_style`, `apply_style_to_node`, `set_effects`, `bind_variable_to_node` |
-| Variables | `create_variable_collection`, `add_variable_mode`, `create_variable`, `set_variable_value`, `delete_variable` |
-| Components | `group_nodes`, `boolean_operation`, `flatten_nodes`, `ungroup_nodes`, `create_instance`, `set_instance_properties`, `swap_component`, `detach_instance`, `set_component_property` |
-| Prototype | `set_reactions`, `remove_reactions` |
-| Pages | `navigate_to_page`, `add_page`, `delete_page`, `rename_page`, `set_selection` |
-| Export | `export_frames_to_pdf`, `export_nodes` |
+| Create | `create_frame`, `create_rectangle`, `create_ellipse`, `create_text`, `import_image`, `create_component`, `create_section`, `create_line`, `create_star`, `create_polygon`, `create_node_from_svg`, `create_vector`, `outline_stroke`, `batch_create_nodes`, `create_slice`, `create_text_on_path`, `import_component_by_key`, `import_component_set_by_key` |
+| Modify | `set_text`, `set_text_properties`, `set_fills`, `set_strokes`, `set_gradient_fill`, `move_nodes`, `resize_nodes`, `rename_node`, `clone_node`, `set_opacity`, `set_corner_radius`, `set_auto_layout`, `delete_nodes`, `set_visible`, `set_locked`, `rotate_nodes`, `reorder_nodes`, `set_blend_mode`, `set_constraints`, `set_layer_behavior`, `reparent_nodes`, `batch_rename_nodes`, `find_replace_text`, `set_viewport`, `set_plugin_data`, `set_text_range`, `insert_text`, `delete_text`, `set_annotations`, `set_export_settings`, `add_annotation_category`, `notify`, `set_relaunch_data` |
+| Styles | `create_paint_style`, `create_text_style`, `create_effect_style`, `create_grid_style`, `update_paint_style`, `update_text_style`, `update_effect_style`, `update_grid_style`, `delete_style`, `apply_style_to_node`, `set_effects`, `bind_variable_to_node`, `apply_animation_style`, `remove_animation_style`, `import_style_by_key` |
+| Variables | `create_variable_collection`, `add_variable_mode`, `create_variable`, `set_variable_value`, `delete_variable`, `import_variable_by_key` |
+| Components | `group_nodes`, `boolean_operation`, `flatten_nodes`, `ungroup_nodes`, `create_instance`, `set_instance_properties`, `swap_component`, `detach_instance`, `set_component_property`, `combine_as_variants`, `edit_component_property`, `delete_component_property` |
+| Prototype | `set_reactions`, `remove_reactions`, `set_flow_starting_points` |
+| Pages | `navigate_to_page`, `add_page`, `delete_page`, `rename_page`, `set_selection`, `clone_page` |
 
 ### What the tool names don't tell you
 

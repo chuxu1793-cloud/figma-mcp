@@ -1,0 +1,5 @@
+﻿{
+    "name":  "figma-mcp",
+    "version":  "0.4.0",
+    "description":  "辅助 AI agent 完成 figma-mcp 的安装、注册、连接与排障，经 Figma 桌面端插件桥直连设计文件——无需 Figma API token、无速率限制、免费版可用，提供 128 个读写工具(35 读 + 93 写，覆盖样式、变量、组件、原型、文本、导出、团队库等)和 14 条内置设计策略 prompt，另含文档变更 watch mode：插件侧变更去抖打包后，以 MCP 通知实时推送给客户端。"
+}
